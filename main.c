@@ -150,10 +150,11 @@ void free_memory() {
 
 }
 
-cl_mem create_and_init_vector(int grootte)
+cl_mem create_and_init_vector(void)
 {
+	int grootte = SIZE;
     cl_int error;
-    float *host_vec = (float*) malloc(sizeof(cl_float) * grootte * grootte);
+    cl_float *host_vec = (cl_float*) malloc(sizeof(cl_float) * grootte * grootte);
     for (int i = 0; i < grootte * grootte; ++i)
         host_vec[i] = i;
     cl_mem dev_vec = clCreateBuffer(g_context,
@@ -162,6 +163,7 @@ cl_mem create_and_init_vector(int grootte)
     ocl_err(error);
     ocl_err(clFinish(g_command_queue));
     free(host_vec);
+	printf("created dev vector\n");
     return dev_vec;
 }
 
@@ -223,7 +225,7 @@ void read_weights(char *in_file, int lvls) {
 	for (z = 0; z < 3; z++) {
 		if (total_lvls_read >= lvls && lvls != -1)
 			break;
-		printf("Read dense block %d weights. Neen Waldo.\n", z);
+		printf("Read dense block %d weights\n", z);
 		for (i = 0; i < dshape[z][0]; i++) {
 			for (j = 0; j < dshape[z][1]; j++) {
 				fscanf(iin, "%f", &dval);
@@ -313,28 +315,10 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 {
 	for (int output_it = 0; output_it < output_depth; output_it++) {
 		for (int input_it = 0; input_it < input_depth; input_it++) {
-
-			// copypaste from cpu mem to shared mem
-			// for (int i = 0; i < feature_size; i++)
-			// {
-			// 	for (int j = 0; j < feature_size; j++)
-			// 	{
-					clEnqueueWriteBuffer(g_command_queue, matrix, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size, &input_features[output_it * input_depth * CONV_SIZE * CONV_SIZE +
-							  				 input_it * CONV_SIZE * CONV_SIZE], 0, NULL, NULL);
-					//matrix[(i * feature_size) + j] = input_features[input_it * feature_size * feature_size][i][j];
-				// }
-			// }
-
-			// for (int i = 0; i < feature_size; i++)
-			// {
-			// 	for (int j = 0; j < feature_size; j++)
-			// 	{
-					clEnqueueWriteBuffer(g_command_queue, kernel_, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size, &layer_weights[output_it * input_depth * CONV_SIZE * CONV_SIZE +
-							  				 input_it * CONV_SIZE * CONV_SIZE], 0, NULL, NULL);
-					//kernel_[(i * feature_size) + j] = layer_weights[output_it * input_depth * CONV_SIZE * CONV_SIZE +
-							  				 //input_it * CONV_SIZE * CONV_SIZE][i][j];
-			// 	}
-			// }
+			clEnqueueWriteBuffer(g_command_queue, matrix, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size, &input_features[output_it * input_depth * CONV_SIZE * CONV_SIZE +
+									input_it * CONV_SIZE * CONV_SIZE], 0, NULL, NULL);
+			clEnqueueWriteBuffer(g_command_queue, kernel_, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size, &layer_weights[output_it * input_depth * CONV_SIZE * CONV_SIZE +
+									input_it * CONV_SIZE * CONV_SIZE], 0, NULL, NULL);
 
 			// Set kernel arguments
 			int arg_num = 0;
@@ -342,8 +326,6 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 			ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &matrix));
 			ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &kernel_));
 			ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &output));
-
-			
 
 		}
 		// Read result
@@ -448,16 +430,14 @@ void get_VGG16_predict(int only_convolution) {
 
 	cl_int error;
     // Create device buffers.
-    matrix = create_and_init_vector(SIZE);
-    kernel_ = create_and_init_vector(SIZE);
+    matrix = create_and_init_vector();
+    kernel_ = create_and_init_vector();
     output = create_result_buffer();
     host_result = malloc(sizeof(float) * SIZE * SIZE);
 
     // Create kernel
     kernel = clCreateKernel(g_program, "convolution_3_x_3", &error);
     ocl_err(error);
-
-	printf("hierzo");
 
 	int level, cur_size;
 
@@ -506,9 +486,11 @@ void get_VGG16_predict(int only_convolution) {
 	reset_mem_block(mem_block1);
 	time_measure_stop_and_print("Layer5");
 	
+	time_measure_start("Layer6");
 	// Layer 6 (MaxPooling)
 	maxpooling(cur_size, cshape[level][0], mem_block2);
 	cur_size /= 2;
+	time_measure_stop_and_print("Layer6");
 
 	time_measure_start("Layer7");
 	// Layer 7 (Convolution 128 -> 256)
@@ -677,6 +659,11 @@ int main(int argc, char *argv[]) {
 		lvls = 13;
 		only_convolution = 1;
 	}
+
+	cl_platform_id platform = ocl_select_platform();
+    cl_device_id device = ocl_select_device(platform);
+    init_ocl(device);
+    create_program("kernel.cl", "");
 
 	init_memory();
 	read_weights(weights_file, lvls);
