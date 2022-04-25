@@ -13,18 +13,14 @@
 #define MEM_BLOCK_DEPTH 512
 
 
-
-__kernel void convolution_3_x_3(
-    int size, __global float *matrix, 
-    __global float *_kernel, __global float *out)
+void conv_3x3 (int size, float *matrix, float *_kernel, float *out)
 {
-    int i, j;
+	int i, j;
 	float sum;
 	float zeropad[SIZE + 2][SIZE + 2] = { {0.} };
 
 	for (i = 0; i < size; i++) {
 		for (j = 0; j < size; j++) {
-			//zeropad[i + 1][j + 1] = matrix[i][j];
 			zeropad[i + 1][j + 1] = matrix[(size * i) + j];
 		}
 	}
@@ -43,5 +39,34 @@ __kernel void convolution_3_x_3(
 			// out[i][j] += sum;
 			out[(size * i) + j] += sum;
 		}
+	}
+}
+
+void add_bias_and_relu(int size, float *out, float bs) {
+	int i, j;
+
+	for (i = 0; i < size; i++) {
+		for (j = 0; j < size; j++) {
+			out[(i * size) + j] += bs;
+			if (out[(i * size) + j] < 0)
+				out[(i * size) + j] = 0.0;
+		}
+	}
+}
+
+__kernel void convolution_3_x_3(
+    int feature_size, int input_depth, int output_depth, __global float *input_features, 
+    __global float *layer_weights, __global float *layer_biases, __global float *output_features)
+{
+	for (int output_it = 0; output_it < output_depth; output_it++) 
+	{
+		for (int input_it = 0; input_it < input_depth; input_it++) 
+		{
+			conv_3x3(feature_size, &input_features[input_it * feature_size * feature_size],
+							  &layer_weights[output_it * input_depth * CONV_SIZE * CONV_SIZE +
+							  				 input_it * CONV_SIZE * CONV_SIZE],
+							  &output_features[output_it * feature_size * feature_size]);
+		}
+		add_bias_and_relu(feature_size, &output_features[output_it * feature_size * feature_size], layer_biases[output_it]);
 	}
 }
