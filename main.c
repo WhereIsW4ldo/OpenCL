@@ -88,7 +88,7 @@ float *mem_block2_dense;
 
 
 void reset_mem_block(float *mem) {
-	memset(mem, 0, MEM_BLOCK_DEPTH * SIZE * SIZE * sizeof(float));
+	memset(mem, 0, MEM_BLOCK_DEPTH * SIZE * SIZE * sizeof(cl_float));
 }
 
 
@@ -362,8 +362,7 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &kernel_));
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &output));
 
-	printf("hierzo\n");
-	ocl_err(clEnqueueReadBuffer(g_command_queue, output, CL_TRUE, 0, sizeof(cl_float) * SIZE * SIZE * MEM_BLOCK_DEPTH, &output_features, 0, NULL, NULL));
+	ocl_err(clEnqueueReadBuffer(g_command_queue, output, CL_TRUE, 0, sizeof(cl_float) * SIZE * SIZE, &output_features, 0, NULL, NULL));
 }
 
 void add_bias_and_relu_flatten(float *out, float *bs, int size, int relu) {
