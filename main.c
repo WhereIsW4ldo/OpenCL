@@ -22,8 +22,8 @@
 
 //#include <opencv2/opencv.hpp>
 
-#include "time_utils.h"
-#include "ocl_utils.h"
+#include "./common/time_utils.h"
+#include "./common/ocl_utils.h"
 #include "imagenet_labels.h"
 
 #define SIZE 224
@@ -334,7 +334,7 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 			// printf("%d\n", ((output_it * input_depth * feature_size * feature_size) + (input_it * feature_size * feature_size)) <= (SIZE * SIZE * MEM_BLOCK_DEPTH));
 			// Read result
 			ocl_err(clEnqueueReadBuffer(g_command_queue, output, CL_TRUE,
-					0, sizeof(cl_float) * SIZE*SIZE, &output_features[output_it * feature_size * feature_size + (intput_it * feature_size)], 0, NULL, NULL));
+					0, sizeof(cl_float) * SIZE*SIZE, &output_features[output_it * feature_size * feature_size + (input_it * feature_size)], 0, NULL, NULL));
 		}
 		
 		add_bias_and_relu(feature_size, &output_features[output_it * feature_size * feature_size], layer_biases[output_it]);

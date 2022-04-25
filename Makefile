@@ -8,7 +8,7 @@ INCLUDES = imagenet_labels.h
 all: vgg
 
 vgg: main.o
-	$(CC) main.o ../common/libutils.a -o vgg $(LIBS)
+	$(CC) main.o ./common/libutils.a -o vgg $(LIBS)
 
 main.o: main.c $(INCLUDES)
 	$(CC) -c $(CFLAGS) main.c
