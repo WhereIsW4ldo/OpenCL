@@ -315,10 +315,13 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 {
 	for (int output_it = 0; output_it < output_depth; output_it++) {
 		for (int input_it = 0; input_it < input_depth; input_it++) {
-			clEnqueueWriteBuffer(g_command_queue, matrix, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size, &input_features[output_it * input_depth * CONV_SIZE * CONV_SIZE +
-									input_it * CONV_SIZE * CONV_SIZE], 0, NULL, NULL);
-			clEnqueueWriteBuffer(g_command_queue, kernel_, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size, &layer_weights[output_it * input_depth * CONV_SIZE * CONV_SIZE +
-									input_it * CONV_SIZE * CONV_SIZE], 0, NULL, NULL);
+			clEnqueueWriteBuffer(g_command_queue, matrix, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size, 
+									&input_features[(output_it * input_depth * CONV_SIZE * CONV_SIZE) +
+									(input_it * CONV_SIZE * CONV_SIZE)], 0, NULL, NULL);
+
+			clEnqueueWriteBuffer(g_command_queue, kernel_, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size, 
+									&layer_weights[(output_it * input_depth * CONV_SIZE * CONV_SIZE) +
+									(input_it * CONV_SIZE * CONV_SIZE)], 0, NULL, NULL);
 
 			// Set kernel arguments
 			int arg_num = 0;
@@ -327,10 +330,13 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 			ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &kernel_));
 			ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &output));
 
+			// printf("output_it = %d, input_depth = %d, feature_size = %d, input_it = %d\n", output_it, input_depth, feature_size, input_it);
+			// printf("%d\n", ((output_it * input_depth * feature_size * feature_size) + (input_it * feature_size * feature_size)) <= (SIZE * SIZE * MEM_BLOCK_DEPTH));
+			// Read result
+			ocl_err(clEnqueueReadBuffer(g_command_queue, output, CL_TRUE,
+					0, sizeof(cl_float) * SIZE*SIZE, &output_features[output_it * feature_size * feature_size + (intput_it * feature_size)], 0, NULL, NULL));
 		}
-		// Read result
-		ocl_err(clEnqueueReadBuffer(g_command_queue, output, CL_TRUE,
-					0, sizeof(cl_float) * SIZE*SIZE, &output_features[output_it * feature_size * feature_size], 0, NULL, NULL));
+		
 		add_bias_and_relu(feature_size, &output_features[output_it * feature_size * feature_size], layer_biases[output_it]);
 	}
 }
@@ -681,8 +687,8 @@ int main(int argc, char *argv[]) {
 
 	output_predictions();
 
-
 	free_memory();
+
 	return 0;
 }
 
