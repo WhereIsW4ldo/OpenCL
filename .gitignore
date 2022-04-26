@@ -1,6 +1,6 @@
 Makefile
 vgg
-.vscode/settings.json
+.vscode
 vgg16_weights.txt
 *.o
 vgg
