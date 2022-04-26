@@ -2,3 +2,5 @@
 *.txt
 *.o
 .vscode/settings.json
+vgg
+main.o
