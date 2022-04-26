@@ -53,12 +53,11 @@ void conv_3x3 (int size, __global float *matrix, __global float *_kernel, __glob
 		
 }
 
-
 void add_bias_and_relu(int size, __global float *out, float bs) {
 	int id_x = get_global_id(0);
 	int id_y = get_global_id(1);
 
-	out[(id_x * size) + id_y] += bs;
+	AtomicAdd(&out[(id_x * size) + id_y], bs);
 	if (out[(id_x * size) + id_y] < 0)
 		out[(id_x * size) + id_y] = 0.0;
 
