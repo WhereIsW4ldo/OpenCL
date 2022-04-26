@@ -4,3 +4,4 @@
 .vscode/settings.json
 vgg
 main.o
+.vscode/c_cpp_properties.json
