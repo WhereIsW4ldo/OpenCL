@@ -22,8 +22,8 @@
 
 //#include <opencv2/opencv.hpp>
 
-#include "common/time_utils.h"
-#include "common/ocl_utils.h"
+#include "./common/time_utils.h"
+#include "./common/ocl_utils.h"
 #include "imagenet_labels.h"
 
 #define SIZE 224
