@@ -54,19 +54,24 @@ void add_bias_and_relu(int size, float *out, float bs) {
 	}
 }
 
-__kernel void convolution_3_x_3(
+__kernel void gpu_shenanigans(
     int feature_size, int input_depth, int output_depth, __global float *input_features, 
     __global float *layer_weights, __global float *layer_biases, __global float *output_features)
 {
+
+	float* input  = &input_features;
+	float* output = &output_features;
+	float* weight = &layer_weights;
+
 	for (int output_it = 0; output_it < output_depth; output_it++) 
 	{
 		for (int input_it = 0; input_it < input_depth; input_it++) 
 		{
-			conv_3x3(feature_size, &input_features[input_it * feature_size * feature_size],
-							  &layer_weights[output_it * input_depth * CONV_SIZE * CONV_SIZE +
+			conv_3x3(feature_size, &input[input_it * feature_size * feature_size],
+							  &weight[output_it * input_depth * CONV_SIZE * CONV_SIZE +
 							  				 input_it * CONV_SIZE * CONV_SIZE],
-							  &output_features[output_it * feature_size * feature_size]);
+							  &output[output_it * feature_size * feature_size]);
 		}
-		add_bias_and_relu(feature_size, &output_features[output_it * feature_size * feature_size], layer_biases[output_it]);
+		add_bias_and_relu(feature_size, &output[output_it * feature_size * feature_size], layer_biases[output_it]);
 	}
 }

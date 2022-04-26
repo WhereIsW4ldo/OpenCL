@@ -22,8 +22,8 @@
 
 //#include <opencv2/opencv.hpp>
 
-#include "./common/time_utils.h"
-#include "./common/ocl_utils.h"
+#include "common/time_utils.h"
+#include "common/ocl_utils.h"
 #include "imagenet_labels.h"
 
 #define SIZE 224
@@ -70,6 +70,7 @@ float *bd[NUM_DENSE];
 
 cl_mem matrix;
 cl_mem kernel_;
+cl_mem layer;
 cl_mem output;
 cl_kernel kernel;
 float *host_result;
@@ -154,12 +155,12 @@ cl_mem create_and_init_vector(void)
 {
 	int grootte = SIZE;
     cl_int error;
-    cl_float *host_vec = (cl_float*) malloc(sizeof(cl_float) * grootte * grootte);
-    for (int i = 0; i < grootte * grootte; ++i)
+    float *host_vec = (float*) malloc(sizeof(cl_float) * grootte * grootte * MEM_BLOCK_DEPTH);
+    for (int i = 0; i < grootte * grootte * MEM_BLOCK_DEPTH; ++i)
         host_vec[i] = i;
     cl_mem dev_vec = clCreateBuffer(g_context,
             CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-            sizeof(cl_float) * grootte * grootte, host_vec, &error);
+            sizeof(float) * grootte * grootte * MEM_BLOCK_DEPTH, host_vec, &error);
     ocl_err(error);
     ocl_err(clFinish(g_command_queue));
     free(host_vec);
@@ -170,12 +171,12 @@ cl_mem create_and_init_vector(void)
 cl_mem create_result_buffer(void)
 {
     cl_int error;
-    cl_float *host_vec = (cl_float*) malloc(sizeof(cl_float) * SIZE * SIZE * MEM_BLOCK_DEPTH);
+    float *host_vec = (float*) malloc(sizeof(cl_float) * SIZE * SIZE * MEM_BLOCK_DEPTH);
     for (int i = 0; i < SIZE * SIZE * MEM_BLOCK_DEPTH; ++i)
         host_vec[i] = 0;
 
-    cl_mem dev_vec = clCreateBuffer(g_context, CL_MEM_WRITE_ONLY | CL_MEM_COPY_HOST_PTR,
-            sizeof(cl_float) * SIZE * SIZE * MEM_BLOCK_DEPTH, host_vec, &error);
+    cl_mem dev_vec = clCreateBuffer(g_context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
+            sizeof(float) * SIZE * SIZE * MEM_BLOCK_DEPTH, host_vec, &error);
     ocl_err(error);
     return dev_vec;
 }
@@ -270,7 +271,7 @@ void store_image(const unsigned char *input)
 }
 
 // function in kernel
-void convolution_3_x_3(int size, float matrix[][size], float kernel[][CONV_SIZE],
+void gpu_shenanigans(int size, float matrix[][size], float kernel[][CONV_SIZE],
                        float out[][size]) {
 	int i, j;
 	float sum;
@@ -342,27 +343,39 @@ void add_bias_and_relu(int size, float out[][size], float bs) {
 // }
 
 void convolution_layer(int feature_size, int input_depth, int output_depth,
-					   float *input_features, float *layer_weights, float *layer_biases, float *output_features) // momenteel worden alle lagen van de input meegegeven en niet maar 1 laag, dit moet nog aangepast worden
+					   float *input_features, float *layer_weights, float *layer_biases, float *output_features, int level) // momenteel worden alle lagen van de input meegegeven en niet maar 1 laag, dit moet nog aangepast worden
 {
 	// we geven hierbij een hele laag (in diepte mee) en deze moet de gpu dan verwerken
 	// dit zorgt voor minder communicatie tussen gpu en cpu en daardoor (hopelijk) een 
 	// kortere compute tijd.
 
 	// vul buffer matrix en kernel_ in met de data van input_features en layer_weights
-	clEnqueueWriteBuffer(g_command_queue, matrix, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size * input_depth, &input_features, 0, NULL, NULL);
+	printf("writing to matrix\n");
+	clEnqueueWriteBuffer(g_command_queue, matrix,  CL_TRUE, 0, sizeof(cl_float) * SIZE * SIZE * MEM_BLOCK_DEPTH, &input_features, 0, NULL, NULL);
+	printf("wrote to matrix\n");
 
-	clEnqueueWriteBuffer(g_command_queue, kernel_, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size * input_depth, &layer_weights, 0, NULL, NULL);
+	clEnqueueWriteBuffer(g_command_queue, kernel_, CL_TRUE, 0, sizeof(cl_float) * cshape[level][0] * cshape[level][1] * cshape[level][2] * cshape[level][3], &layer_weights , 0, NULL, NULL);
+	printf("wrote to kernel\n");
+
+	clEnqueueWriteBuffer(g_command_queue, layer  , CL_TRUE, 0, sizeof(cl_float) * cshape[level][0], &layer_biases  , 0, NULL, NULL);
+	printf("wrote to layer\n");
+
 
 	// geef alle nodige argumenten mee aan de gpu (hier moeten er nog extra bij om te weten welke laag er effectief nodig is)
 	int arg_num = 0;
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &feature_size));
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &input_depth));
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &output_depth));
-	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &matrix));
-	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &kernel_));
-	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &output));
+	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &matrix)); // input_features
+	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &kernel_));// layer_weights
+	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &layer));// layer_weights
+	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &output)); // output_features
 
-	ocl_err(clEnqueueReadBuffer(g_command_queue, output, CL_TRUE, 0, sizeof(cl_float) * SIZE * SIZE, &output_features, 0, NULL, NULL));
+	printf("reading output now:\n");
+
+	ocl_err(clEnqueueReadBuffer(g_command_queue, output, CL_TRUE, 0, sizeof(cl_float) * SIZE * SIZE * MEM_BLOCK_DEPTH, &output_features, 0, NULL, NULL));
+
+	printf("read output from GPU\n");
 }
 
 void add_bias_and_relu_flatten(float *out, float *bs, int size, int relu) {
@@ -460,11 +473,12 @@ void get_VGG16_predict(int only_convolution) {
     // Create device buffers.
     matrix = create_and_init_vector();
     kernel_ = create_and_init_vector();
+	layer = create_and_init_vector();
     output = create_result_buffer();
     host_result = malloc(sizeof(float) * SIZE * SIZE);
 
     // Create kernel
-    kernel = clCreateKernel(g_program, "convolution_3_x_3", &error);
+    kernel = clCreateKernel(g_program, "gpu_shenanigans", &error);
     ocl_err(error);
 
 	int level, cur_size;
@@ -478,7 +492,7 @@ void get_VGG16_predict(int only_convolution) {
 	level = 0;
 	cur_size = SIZE;
 	convolution_layer(cur_size, cshape[level][1], cshape[level][0],
-					  image, wc[level], bc[level], mem_block1);
+					  image, wc[level], bc[level], mem_block1, level);
 	time_measure_stop_and_print("Layer1");
 
 
@@ -486,7 +500,7 @@ void get_VGG16_predict(int only_convolution) {
 	// Layer 2 (Convolution 64 -> 64)
 	level = 1;
 	convolution_layer(cur_size, cshape[level][1], cshape[level][0],
-					  mem_block1, wc[level], bc[level], mem_block2);
+					  mem_block1, wc[level], bc[level], mem_block2, level);
 					  time_measure_stop_and_print("Layer2");
 	reset_mem_block(mem_block1);
 	
@@ -501,7 +515,7 @@ void get_VGG16_predict(int only_convolution) {
 	// Layer 4 (Convolution 64 -> 128)
 	level = 2;
 	convolution_layer(cur_size, cshape[level][1], cshape[level][0],
-					  mem_block2, wc[level], bc[level], mem_block1);
+					  mem_block2, wc[level], bc[level], mem_block1, level);
 	reset_mem_block(mem_block2);
 	time_measure_stop_and_print("Layer4");
 
@@ -510,7 +524,7 @@ void get_VGG16_predict(int only_convolution) {
 	// Layer 5 (Convolution 128 -> 128)
 	level = 3;
 	convolution_layer(cur_size, cshape[level][1], cshape[level][0],
-					  mem_block1, wc[level], bc[level], mem_block2);
+					  mem_block1, wc[level], bc[level], mem_block2, level);
 	reset_mem_block(mem_block1);
 	time_measure_stop_and_print("Layer5");
 	
@@ -524,7 +538,7 @@ void get_VGG16_predict(int only_convolution) {
 	// Layer 7 (Convolution 128 -> 256)
 	level = 4;
 	convolution_layer(cur_size, cshape[level][1], cshape[level][0],
-					  mem_block2, wc[level], bc[level], mem_block1);
+					  mem_block2, wc[level], bc[level], mem_block1, level);
 	reset_mem_block(mem_block2);
 	time_measure_stop_and_print("Layer7");
 
@@ -532,7 +546,7 @@ void get_VGG16_predict(int only_convolution) {
 	// Layer 8 (Convolution 256 -> 256)
 	level = 5;
 	convolution_layer(cur_size, cshape[level][1], cshape[level][0],
-					  mem_block1, wc[level], bc[level], mem_block2);
+					  mem_block1, wc[level], bc[level], mem_block2, level);
 	reset_mem_block(mem_block1);
 	time_measure_stop_and_print("Layer8");
 
@@ -540,7 +554,7 @@ void get_VGG16_predict(int only_convolution) {
 	// Layer 9 (Convolution 256 -> 256)
 	level = 6;
 	convolution_layer(cur_size, cshape[level][1], cshape[level][0],
-					  mem_block2, wc[level], bc[level], mem_block1);
+					  mem_block2, wc[level], bc[level], mem_block1, level);
 	reset_mem_block(mem_block2);
 	time_measure_stop_and_print("Layer9");
 	
@@ -554,7 +568,7 @@ void get_VGG16_predict(int only_convolution) {
 	// Layer 11 (Convolution 256 -> 512)
 	level = 7;
 	convolution_layer(cur_size, cshape[level][1], cshape[level][0],
-					  mem_block1, wc[level], bc[level], mem_block2);
+					  mem_block1, wc[level], bc[level], mem_block2, level);
 	reset_mem_block(mem_block1);
 	time_measure_stop_and_print("Layer11");
 
@@ -562,7 +576,7 @@ void get_VGG16_predict(int only_convolution) {
 	// Layer 12 (Convolution 512 -> 512)
 	level = 8;
 	convolution_layer(cur_size, cshape[level][1], cshape[level][0],
-					  mem_block2, wc[level], bc[level], mem_block1);
+					  mem_block2, wc[level], bc[level], mem_block1, level);
 	reset_mem_block(mem_block2);
 	time_measure_stop_and_print("Layer12");
 
@@ -570,7 +584,7 @@ void get_VGG16_predict(int only_convolution) {
 	// Layer 13 (Convolution 512 -> 512)
 	level = 9;
 	convolution_layer(cur_size, cshape[level][1], cshape[level][0],
-					  mem_block1, wc[level], bc[level], mem_block2);
+					  mem_block1, wc[level], bc[level], mem_block2, level);
 	reset_mem_block(mem_block1);
 	time_measure_stop_and_print("Layer13");
 	
@@ -587,7 +601,7 @@ void get_VGG16_predict(int only_convolution) {
 	// Layer 15 (Convolution 512 -> 512)
 	level = 10;
 	convolution_layer(cur_size, cshape[level][1], cshape[level][0],
-					  mem_block2, wc[level], bc[level], mem_block1);
+					  mem_block2, wc[level], bc[level], mem_block1, level);
 	reset_mem_block(mem_block2);
 	time_measure_stop_and_print("Layer15");
 
@@ -595,7 +609,7 @@ void get_VGG16_predict(int only_convolution) {
 	// Layer 16 (Convolution 512 -> 512)
 	level = 11;
 	convolution_layer(cur_size, cshape[level][1], cshape[level][0],
-					  mem_block1, wc[level], bc[level], mem_block2);
+					  mem_block1, wc[level], bc[level], mem_block2, level);
 	reset_mem_block(mem_block1);
 	time_measure_stop_and_print("Layer16");
 
@@ -603,7 +617,7 @@ void get_VGG16_predict(int only_convolution) {
 	// Layer 17 (Convolution 512 -> 512)
 	level = 12;
 	convolution_layer(cur_size, cshape[level][1], cshape[level][0],
-					  mem_block2, wc[level], bc[level], mem_block1);
+					  mem_block2, wc[level], bc[level], mem_block1, level);
 	reset_mem_block(mem_block2);
 	time_measure_stop_and_print("Layer17");
 	
