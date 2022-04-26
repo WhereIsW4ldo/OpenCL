@@ -22,8 +22,8 @@
 
 //#include <opencv2/opencv.hpp>
 
-#include "./common/time_utils.h"
-#include "./common/ocl_utils.h"
+#include "common/time_utils.h"
+#include "common/ocl_utils.h"
 #include "imagenet_labels.h"
 
 #define SIZE 224
@@ -88,7 +88,7 @@ float *mem_block2_dense;
 
 
 void reset_mem_block(float *mem) {
-	memset(mem, 0, MEM_BLOCK_DEPTH * SIZE * SIZE * sizeof(float));
+	memset(mem, 0, MEM_BLOCK_DEPTH * SIZE * SIZE * sizeof(cl_float));
 }
 
 
@@ -119,8 +119,8 @@ void init_memory() {
 	}
 
 	// Init mem_blocks
-	mem_block1 = malloc(MEM_BLOCK_DEPTH * SIZE * SIZE * sizeof(float));
-	mem_block2 = malloc(MEM_BLOCK_DEPTH * SIZE * SIZE * sizeof(float));
+	mem_block1 = malloc(MEM_BLOCK_DEPTH * SIZE * SIZE * sizeof(cl_float));
+	mem_block2 = malloc(MEM_BLOCK_DEPTH * SIZE * SIZE * sizeof(cl_float));
 	reset_mem_block(mem_block1);
 	reset_mem_block(mem_block2);
 }
@@ -170,12 +170,12 @@ cl_mem create_and_init_vector(void)
 cl_mem create_result_buffer(void)
 {
     cl_int error;
-    float *host_vec = (float*) malloc(sizeof(cl_float) * SIZE * SIZE);
-    for (int i = 0; i < SIZE * SIZE; ++i)
+    cl_float *host_vec = (cl_float*) malloc(sizeof(cl_float) * SIZE * SIZE * MEM_BLOCK_DEPTH);
+    for (int i = 0; i < SIZE * SIZE * MEM_BLOCK_DEPTH; ++i)
         host_vec[i] = 0;
 
     cl_mem dev_vec = clCreateBuffer(g_context, CL_MEM_WRITE_ONLY | CL_MEM_COPY_HOST_PTR,
-            sizeof(cl_float) * SIZE * SIZE, host_vec, &error);
+            sizeof(cl_float) * SIZE * SIZE * MEM_BLOCK_DEPTH, host_vec, &error);
     ocl_err(error);
     return dev_vec;
 }
@@ -310,38 +310,62 @@ void add_bias_and_relu(int size, float out[][size], float bs) {
 	}
 }
 
-void convolution_layer(int feature_size, int input_depth, int output_depth,
-					   float *input_features, float *layer_weights, float *layer_biases, float *output_features)
-{
-	for (int output_it = 0; output_it < output_depth; output_it++) {
-		for (int input_it = 0; input_it < input_depth; input_it++) {
-			clEnqueueWriteBuffer(g_command_queue, matrix, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size, 
-									&input_features[(output_it * input_depth * CONV_SIZE * CONV_SIZE) +
-									(input_it * feature_size * feature_size)], 0, NULL, NULL);
+// void convolution_layer(int feature_size, int input_depth, int output_depth,
+// 					   float *input_features, float *layer_weights, float *layer_biases, float *output_features)
+// {
+// 	for (int output_it = 0; output_it < output_depth; output_it++) {
+// 		for (int input_it = 0; input_it < input_depth; input_it++) {
+// 			clEnqueueWriteBuffer(g_command_queue, matrix, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size, 
+// 									&input_features[(output_it * input_depth * CONV_SIZE * CONV_SIZE) +
+// 									(input_it * CONV_SIZE * CONV_SIZE)], 0, NULL, NULL);
 
-			clEnqueueWriteBuffer(g_command_queue, kernel_, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size, 
-									&layer_weights[(output_it * input_depth * CONV_SIZE * CONV_SIZE) +
-									(input_it * CONV_SIZE * CONV_SIZE)], 0, NULL, NULL);
+// 			clEnqueueWriteBuffer(g_command_queue, kernel_, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size, 
+// 									&layer_weights[(output_it * input_depth * CONV_SIZE * CONV_SIZE) +
+// 									(input_it * CONV_SIZE * CONV_SIZE)], 0, NULL, NULL);
 
-			// Set kernel arguments
-			int arg_num = 0;
-			ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &feature_size));
-			ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &matrix));
-			ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &kernel_));
-			ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &output));
+// 			// Set kernel arguments
+// 			int arg_num = 0;
+// 			ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &feature_size));
+// 			ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &matrix));
+// 			ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &kernel_));
+// 			ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &output));
 
-			// printf("output_it = %d, input_depth = %d, feature_size = %d, input_it = %d\n", output_it, input_depth, feature_size, input_it);
-			// printf("%d\n", ((output_it * input_depth * feature_size * feature_size) + (input_it * feature_size * feature_size)) <= (SIZE * SIZE * MEM_BLOCK_DEPTH));
-			// Read result
-			ocl_err(clEnqueueReadBuffer(g_command_queue, output, CL_TRUE,
-					0, sizeof(cl_float) * feature_size * feature_size, &output_features[output_it * feature_size * feature_size + (input_it * input_depth)], 0, NULL, NULL));
-		}
+// 			// printf("output_it = %d, input_depth = %d, feature_size = %d, input_it = %d\n", output_it, input_depth, feature_size, input_it);
+// 			// printf("%d\n", ((output_it * input_depth * feature_size * feature_size) + (input_it * feature_size * feature_size)) <= (SIZE * SIZE * MEM_BLOCK_DEPTH));
+// 			// Read result
+// 			ocl_err(clEnqueueReadBuffer(g_command_queue, output, CL_TRUE,
+// 					0, sizeof(cl_float) * SIZE*SIZE, &output_features[output_it * feature_size * feature_size + (input_it * feature_size)], 0, NULL, NULL));
+// 		}
 		
-		add_bias_and_relu(feature_size, &output_features[output_it * feature_size * feature_size], layer_biases[output_it]);
-	}
+// 		add_bias_and_relu(feature_size, &output_features[output_it * feature_size * feature_size], layer_biases[output_it]);
+// 	}
+// }
+
+void convolution_layer(int feature_size, int input_depth, int output_depth,
+					   float *input_features, float *layer_weights, float *layer_biases, float *output_features) // momenteel worden alle lagen van de input meegegeven en niet maar 1 laag, dit moet nog aangepast worden
+{
+	// we geven hierbij een hele laag (in diepte mee) en deze moet de gpu dan verwerken
+	// dit zorgt voor minder communicatie tussen gpu en cpu en daardoor (hopelijk) een 
+	// kortere compute tijd.
+
+	// vul buffer matrix en kernel_ in met de data van input_features en layer_weights
+	clEnqueueWriteBuffer(g_command_queue, matrix, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size * input_depth, &input_features, 0, NULL, NULL);
+
+	clEnqueueWriteBuffer(g_command_queue, kernel_, CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size * input_depth, &layer_weights, 0, NULL, NULL);
+
+	// geef alle nodige argumenten mee aan de gpu (hier moeten er nog extra bij om te weten welke laag er effectief nodig is)
+	int arg_num = 0;
+	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &feature_size));
+	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &input_depth));
+	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &output_depth));
+	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &matrix));
+	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &kernel_));
+	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &output));
+
+	printf("hier zit ik al en nu gaat er een core dumped komen:\n");
+
+	ocl_err(clEnqueueReadBuffer(g_command_queue, output, CL_TRUE, 0, sizeof(cl_float) * SIZE * SIZE, &output_features, 0, NULL, NULL));
 }
-
-
 
 void add_bias_and_relu_flatten(float *out, float *bs, int size, int relu) {
 	int i;
