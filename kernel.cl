@@ -12,66 +12,73 @@
     ((l) * (SIZE) * (SIZE))
 #define MEM_BLOCK_DEPTH 512
 
+inline void AtomicAdd(volatile __global float *source, const float operand) {
+    union {
+        unsigned int intVal;
+        float floatVal;
+    } newVal;
+    union {
+        unsigned int intVal;
+        float floatVal;
+    } prevVal;
+    do {
+        prevVal.floatVal = *source;
+        newVal.floatVal = prevVal.floatVal + operand;
+    } while (atomic_cmpxchg((volatile __global unsigned int *)source, prevVal.intVal,
+                newVal.intVal) != prevVal.intVal);
+}
 
-void conv_3x3 (int size, float *matrix, float *_kernel, float *out)
+void conv_3x3 (int size, __global float *matrix, __global float *_kernel, __global float *out, __global float *zeropad)
 {
 	int i, j;
 	float sum;
-	float zeropad[SIZE + 2][SIZE + 2] = { {0.} };
 
-	for (i = 0; i < size; i++) {
-		for (j = 0; j < size; j++) {
-			zeropad[i + 1][j + 1] = matrix[(size * i) + j];
-		}
-	}
+	i = get_global_id(0);
+	j = get_global_id(1);
 
-	for (i = 0; i < size; i++) {
-		for (j = 0; j < size; j++) {
-			sum = zeropad[i][j] * _kernel[0 * 3 + 0] +
-				zeropad[i + 1][j] * _kernel[1 * 3 + 0] +
-				zeropad[i + 2][j] * _kernel[2 * 3 + 0]+
-				zeropad[i][j + 1] * _kernel[0 * 3 + 1]+
-				zeropad[i + 1][j + 1] * _kernel[1 * 3 + 1]+
-				zeropad[i + 2][j + 1] * _kernel[2 * 3 + 1]+
-				zeropad[i][j + 2] * _kernel[0 * 3 + 2]+
-				zeropad[i + 1][j + 2] * _kernel[1 * 3 + 2]+
-				zeropad[i + 2][j + 2] * _kernel[2 * 3 + 2];
-			// out[i][j] += sum;
-			out[(size * i) + j] += sum;
-		}
-	}
+
+	zeropad[(i + 1)*(SIZE + 2) + j + 1] = matrix[(size * i) + j];
+	
+	
+	sum = zeropad[i*size + j] * _kernel[0 * 3 + 0] +
+		zeropad[(i + 1)*size + j] * _kernel[1 * 3 + 0] +
+		zeropad[(i + 2) * size + j] * _kernel[2 * 3 + 0]+
+		zeropad[i*size + j + 1] * _kernel[0 * 3 + 1]+
+		zeropad[(i + 1) * size + j + 1] * _kernel[1 * 3 + 1]+
+		zeropad[(i + 2) * size + j + 1] * _kernel[2 * 3 + 1]+
+		zeropad[i * size + j + 2] * _kernel[0 * 3 + 2]+
+		zeropad[(i + 1) * size + j + 2] * _kernel[1 * 3 + 2]+
+		zeropad[(i + 2) * size + j + 2] * _kernel[2 * 3 + 2];
+	AtomicAdd(&out[(size*i) + j], sum);
+		
 }
 
-void add_bias_and_relu(int size, float *out, float bs) {
-	int i, j;
 
-	for (i = 0; i < size; i++) {
-		for (j = 0; j < size; j++) {
-			out[(i * size) + j] += bs;
-			if (out[(i * size) + j] < 0)
-				out[(i * size) + j] = 0.0;
-		}
-	}
+void add_bias_and_relu(int size, __global float *out, float bs) {
+	int id_x = get_global_id(0);
+	int id_y = get_global_id(1);
+
+	out[(id_x * size) + id_y] += bs;
+	if (out[(id_x * size) + id_y] < 0)
+		out[(id_x * size) + id_y] = 0.0;
+
 }
 
 __kernel void gpu_shenanigans(
     int feature_size, int input_depth, int output_depth, __global float *input_features, 
-    __global float *layer_weights, __global float *layer_biases, __global float *output_features)
+    __global float *layer_weights, __global float *layer_biases, __global float *output_features, __global float *zeropad)
 {
 
-	float* input  = &input_features;
-	float* output = &output_features;
-	float* weight = &layer_weights;
+	int id_x = get_global_id(0);
+	int id_y = get_global_id(1);
+	int id_z = get_global_id(2);
 
 	for (int output_it = 0; output_it < output_depth; output_it++) 
 	{
-		for (int input_it = 0; input_it < input_depth; input_it++) 
-		{
-			conv_3x3(feature_size, &input[input_it * feature_size * feature_size],
-							  &weight[output_it * input_depth * CONV_SIZE * CONV_SIZE +
-							  				 input_it * CONV_SIZE * CONV_SIZE],
-							  &output[output_it * feature_size * feature_size]);
-		}
-		add_bias_and_relu(feature_size, &output[output_it * feature_size * feature_size], layer_biases[output_it]);
+		conv_3x3(feature_size, &input_features[id_z * feature_size * feature_size],
+							&layer_weights[output_it * input_depth * CONV_SIZE * CONV_SIZE +
+											id_z * CONV_SIZE * CONV_SIZE],
+							&output_features[output_it * feature_size * feature_size], zeropad);
+		add_bias_and_relu(feature_size, &output_features[output_it * feature_size * feature_size], layer_biases[output_it]);
 	}
 }
