@@ -12,7 +12,8 @@
     ((l) * (SIZE) * (SIZE))
 #define MEM_BLOCK_DEPTH 512
 
-inline void AtomicAdd(volatile __global float *source, const float operand) {
+inline void AtomicAdd(volatile __global float *source, const float operand) 
+{
     union {
         unsigned int intVal;
         float floatVal;
@@ -57,7 +58,7 @@ void add_bias_and_relu(int size, __global float *out, float bs) {
 	int id_x = get_global_id(0);
 	int id_y = get_global_id(1);
 
-	AtomicAdd(&out[(id_x * size) + id_y], bs);
+	AtomicAdd(&out[(id_x * size) + id_y], bs); 
 	if (out[(id_x * size) + id_y] < 0)
 		out[(id_x * size) + id_y] = 0.0;
 
@@ -78,6 +79,9 @@ __kernel void gpu_shenanigans(
 							&layer_weights[output_it * input_depth * CONV_SIZE * CONV_SIZE +
 											id_z * CONV_SIZE * CONV_SIZE],
 							&output_features[output_it * feature_size * feature_size], zeropad);
-		add_bias_and_relu(feature_size, &output_features[output_it * feature_size * feature_size], layer_biases[output_it]);
+		
+		barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE); // om te synchroniseren tussen alle work-units
+		if (id_z == 0)
+			add_bias_and_relu(feature_size, &output_features[output_it * feature_size * feature_size], layer_biases[output_it]);
 	}
 }
