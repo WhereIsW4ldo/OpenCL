@@ -39,6 +39,7 @@ void conv_3x3 (int size, __global float *matrix, __global float *_kernel, __glob
 
 
 	zeropad[(i + 1)*(SIZE + 2) + j + 1] = matrix[(size * i) + j];
+	barrier(CLK_GLOBAL_MEM_FENCE | CLK_LOCAL_MEM_FENCE);
 	
 	
 	sum = zeropad[i*size + j] * _kernel[0 * 3 + 0] +
