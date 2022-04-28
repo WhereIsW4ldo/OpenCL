@@ -35,12 +35,7 @@ void conv_3x3 (int size, __global float *matrix, __global float *_kernel, __glob
 	float sum;
 
 	i = get_global_id(0);
-	j = get_global_id(1);
-
-
-	zeropad[(i + 1)*(SIZE + 2) + j + 1] = matrix[(size * i) + j];
-	barrier(CLK_GLOBAL_MEM_FENCE | CLK_LOCAL_MEM_FENCE);
-	
+	j = get_global_id(1);	
 	
 	sum = zeropad[i*size + j] * _kernel[0 * 3 + 0] +
 		zeropad[(i + 1)*size + j] * _kernel[1 * 3 + 0] +
@@ -51,8 +46,9 @@ void conv_3x3 (int size, __global float *matrix, __global float *_kernel, __glob
 		zeropad[i * size + j + 2] * _kernel[0 * 3 + 2]+
 		zeropad[(i + 1) * size + j + 2] * _kernel[1 * 3 + 2]+
 		zeropad[(i + 2) * size + j + 2] * _kernel[2 * 3 + 2];
+	
 	AtomicAdd(&out[(size*i) + j], sum);
-		
+	
 }
 
 void add_bias_and_relu(int size, __global float *out, float bs) {
@@ -74,15 +70,22 @@ __kernel void gpu_shenanigans(
 	int id_y = get_global_id(1);
 	int id_z = get_global_id(2);
 
+	zeropad[id_z*(SIZE+2)*(SIZE+2) + (id_y + 1)*(SIZE + 2) + id_x + 1] = input_features[id_z*(feature_size)*(feature_size) + (feature_size * id_y) + id_x];
+
+
+	// vul 3D zeropad in met input_features data
+	barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+
 	for (int output_it = 0; output_it < output_depth; output_it++) 
 	{
+		barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
 		conv_3x3(feature_size, &input_features[id_z * feature_size * feature_size],
 							&layer_weights[output_it * input_depth * CONV_SIZE * CONV_SIZE +
 											id_z * CONV_SIZE * CONV_SIZE],
-							&output_features[output_it * feature_size * feature_size], zeropad);
+							&output_features[output_it * feature_size * feature_size], &zeropad[id_z * (SIZE+2) * (SIZE+2)]);
 		
-		barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE); // om te synchroniseren tussen alle work-units
-		if (id_z == 0)
+		barrier(CLK_GLOBAL_MEM_FENCE | CLK_LOCAL_MEM_FENCE); // om te synchroniseren tussen alle work-units
+		if ((id_x == 0) && (id_y == 0) && (id_z == 0))
 			add_bias_and_relu(feature_size, &output_features[output_it * feature_size * feature_size], layer_biases[output_it]);
 	}
 }

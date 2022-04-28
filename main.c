@@ -322,8 +322,8 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	clEnqueueWriteBuffer(g_command_queue, layer  , CL_TRUE, 0, sizeof(cl_float) * cshape[level][0], layer_biases  , 0, NULL, NULL);
 	// printf("wrote to layer\n");
 
-	float zero[] = {0};
-	ocl_err(clEnqueueFillBuffer(g_command_queue, zeropad, zero, 1, 0, sizeof(cl_float) * (SIZE + 2) * (SIZE + 2) * cshape[12][0], 0, NULL, NULL));
+	float zero[] = {0}; // we maken een 3d zeropad aan
+	ocl_err(clEnqueueFillBuffer(g_command_queue, zeropad, zero, 1, 0, sizeof(cl_float) * (SIZE + 2) * (SIZE + 2) * MEM_BLOCK_DEPTH, 0, NULL, NULL));
 
 	// geef alle nodige argumenten mee aan de gpu (hier moeten er nog extra bij om te weten welke laag er effectief nodig is)
 	int arg_num = 0;
