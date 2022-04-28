@@ -70,9 +70,8 @@ __kernel void gpu_shenanigans(
 	int id_y = get_global_id(1);
 	int id_z = get_global_id(2);
 
-	zeropad[id_z*(SIZE+2)*(SIZE+2) + (id_y + 1)*(SIZE + 2) + id_x + 1] = input_features[id_z*(feature_size)*(feature_size) + (feature_size * id_y) + id_x];
-
-
+	zeropad[id_z * (SIZE+2) * (SIZE+2) + (id_y + 1) * (SIZE+2) + id_x + 1] = input_features[id_z * (feature_size) * (feature_size) + id_y * (feature_size) + id_x];
+	
 	// vul 3D zeropad in met input_features data
 	barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
 
@@ -85,7 +84,19 @@ __kernel void gpu_shenanigans(
 							&output_features[output_it * feature_size * feature_size], &zeropad[id_z * (SIZE+2) * (SIZE+2)]);
 		
 		barrier(CLK_GLOBAL_MEM_FENCE | CLK_LOCAL_MEM_FENCE); // om te synchroniseren tussen alle work-units
-		if ((id_x == 0) && (id_y == 0) && (id_z == 0))
+		if (id_z == 0)
 			add_bias_and_relu(feature_size, &output_features[output_it * feature_size * feature_size], layer_biases[output_it]);
+		barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
 	}
+}
+
+__kernel void zeroshit(
+	int feature_size, __global float *zeropad, __global float *data
+)
+{
+	int id_x = get_global_id(0);
+	int id_y = get_global_id(1);
+	int id_z = get_global_id(2);
+
+	zeropad[id_z * (SIZE+2) * (SIZE+2) + (id_y + 1) * (SIZE+2) + id_x + 1] = data[id_z * (feature_size) * (feature_size) + id_y * (feature_size) + id_x];
 }

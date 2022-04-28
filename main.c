@@ -70,6 +70,7 @@ float *bd[NUM_DENSE];
 
 cl_mem matrix;
 cl_mem kernel_;
+cl_mem zerokernel;
 cl_mem layer;
 cl_mem zeropad;
 cl_mem output;
@@ -156,7 +157,7 @@ cl_mem create_and_init_vector(int size)
 {
     cl_int error;
     cl_mem dev_vec = clCreateBuffer(g_context,
-            CL_MEM_READ_ONLY,
+            CL_MEM_READ_WRITE,
             sizeof(float) * size * size * MEM_BLOCK_DEPTH, NULL, &error);
     ocl_err(error);
 	printf("created dev vector\n");
@@ -171,7 +172,6 @@ cl_mem create_result_buffer(void)
     ocl_err(error);
     return dev_vec;
 }
-
 
 /*
  * read_weights is te negeren
@@ -310,10 +310,48 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	// we geven hierbij een hele laag (in diepte mee) en deze moet de gpu dan verwerken
 	// dit zorgt voor minder communicatie tussen gpu en cpu en daardoor (hopelijk) een 
 	// kortere compute tijd.
+	float zero[] = {0.0};
+	ocl_err(clEnqueueFillBuffer(g_command_queue, zeropad, zero, 1, 0, sizeof(cl_float) * (SIZE + 2) * (SIZE + 2) * MEM_BLOCK_DEPTH, 0, NULL, NULL));
+
+	clEnqueueWriteBuffer(g_command_queue, matrix,  CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size * input_depth, input_features, 0, NULL, NULL);
+	
+	int arg_num = 0;
+	ocl_err(clSetKernelArg(zerokernel, arg_num++, sizeof(cl_int), &feature_size));
+	ocl_err(clSetKernelArg(zerokernel, arg_num++, sizeof(cl_mem), &zeropad));
+	ocl_err(clSetKernelArg(zerokernel, arg_num++, sizeof(cl_mem), &matrix));
+
+	size_t work_sizes[] = {feature_size, feature_size, input_depth};
+	ocl_err(clEnqueueNDRangeKernel(g_command_queue, zerokernel, 3, NULL, work_sizes, NULL, 0, NULL, NULL));
+
+	float *z = malloc(sizeof(float) * MEM_BLOCK_DEPTH * (SIZE+2) * (SIZE+2));
+	ocl_err(clFinish(g_command_queue));
+	
+	ocl_err(clEnqueueReadBuffer(g_command_queue, zeropad, CL_TRUE, 0, sizeof(cl_float) * (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH, z, 0, NULL, NULL));
+
+	int x = 0;
+	for (int i = 0; i<1; i++)
+	{
+		// printf("[");
+		for(int j = 0; j < SIZE+2;j++)
+		{
+			// printf("[");
+			for (int k = 0; k < SIZE+2; k++)
+			{
+				if (z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k] != 0.0)
+					x += 1;
+				// printf("%f, ", z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k]);
+				// zeropad kan niet beschreven worden want hij toont allemaal 0
+			}
+			// printf("]\n");
+		}
+		// printf("]\n");
+	}
+	printf("niet lege plekken: %d\n", x);
+	// exit(0);
 
 	// vul buffer matrix en kernel_ in met de data van input_features en layer_weights
 	// printf("writing to matrix\n");
-	clEnqueueWriteBuffer(g_command_queue, matrix,  CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size * input_depth, input_features, 0, NULL, NULL);
+	// clEnqueueWriteBuffer(g_command_queue, matrix,  CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size * input_depth, input_features, 0, NULL, NULL);
 	// printf("wrote to matrix\n");
 
 	clEnqueueWriteBuffer(g_command_queue, kernel_, CL_TRUE, 0, sizeof(cl_float) * cshape[level][0] * cshape[level][1] * cshape[level][2] * cshape[level][3], layer_weights , 0, NULL, NULL);
@@ -322,11 +360,8 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	clEnqueueWriteBuffer(g_command_queue, layer  , CL_TRUE, 0, sizeof(cl_float) * cshape[level][0], layer_biases  , 0, NULL, NULL);
 	// printf("wrote to layer\n");
 
-	float zero[] = {0}; // we maken een 3d zeropad aan
-	ocl_err(clEnqueueFillBuffer(g_command_queue, zeropad, zero, 1, 0, sizeof(cl_float) * (SIZE + 2) * (SIZE + 2) * MEM_BLOCK_DEPTH, 0, NULL, NULL));
-
 	// geef alle nodige argumenten mee aan de gpu (hier moeten er nog extra bij om te weten welke laag er effectief nodig is)
-	int arg_num = 0;
+	arg_num = 0;
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &feature_size));
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &input_depth));
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &output_depth));
@@ -337,7 +372,6 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &zeropad)); // zeropad
 
 
-	size_t work_sizes[] = {feature_size, feature_size, input_depth};
 	ocl_err(clEnqueueNDRangeKernel(g_command_queue, kernel, 3, NULL, work_sizes, NULL, 0, NULL, NULL));
 
 	// printf("reading output now:\n");
@@ -451,6 +485,7 @@ void get_VGG16_predict(int only_convolution) {
 
     // Create kernel
     kernel = clCreateKernel(g_program, "gpu_shenanigans", &error);
+	zerokernel = clCreateKernel(g_program, "zeroshit", &error);
     ocl_err(error);
 
 	int level, cur_size;
