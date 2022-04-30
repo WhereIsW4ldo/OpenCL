@@ -70,7 +70,7 @@ float *bd[NUM_DENSE];
 
 cl_mem matrix;
 cl_mem kernel_;
-cl_mem zerokernel;
+cl_kernel zerokernel;
 cl_mem layer;
 cl_mem zeropad;
 cl_mem output;
@@ -304,7 +304,72 @@ void add_bias_and_relu(int size, float out[][size], float bs) {
 
 void testFunctionZeropad()
 {
-	cl_mem
+	cl_int error;
+	cl_mem test_fill = clCreateBuffer(g_context,
+            CL_MEM_READ_WRITE,
+            sizeof(float) * SIZE * SIZE * MEM_BLOCK_DEPTH, NULL, &error);
+
+	cl_mem test_zero = clCreateBuffer(g_context,
+            CL_MEM_READ_WRITE,
+            sizeof(float) * (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH, NULL, &error);
+
+	float zero[] = {0.0};
+	ocl_err(clEnqueueFillBuffer(g_command_queue, test_zero, zero, 1, 0, sizeof(cl_float) * (SIZE + 2) * (SIZE + 2) * MEM_BLOCK_DEPTH, 0, NULL, NULL));
+	// maak buffer aan van SIZE op SIZE op MEM_BLOCK_DEPTH om data in te vullen
+
+	float* test = malloc(sizeof(float) * SIZE * SIZE * MEM_BLOCK_DEPTH);
+	// test is 1 dimensionale array die SIZE op SIZE op MEM_BLOCK_DEPTH groot is
+	for (int i = 0; i < MEM_BLOCK_DEPTH; i++)
+	{
+		for (int j = 0; j < SIZE; j++)
+		{
+			for (int k = 0; k < SIZE; k++)
+			{
+				test[i * (SIZE * SIZE) + j * (SIZE) + k] = k;
+				// vul matrix test met random getalletjes
+			}
+		}
+	}
+
+	ocl_err(clEnqueueWriteBuffer(g_command_queue, test_fill, CL_TRUE, 0, sizeof(cl_float) * SIZE * SIZE * MEM_BLOCK_DEPTH, test, 0, NULL, NULL));
+	// vul buffer met alle informatie van de matrix test
+
+	cl_kernel test_kernel = clCreateKernel(g_program, "zeroshit", &error);
+	// maak kernel aan die zeroshit gaat uitvoeren
+
+	// maak argumenten aan voor zeroshit kernel
+	int feature_size = SIZE;
+
+	// geef correcte argumenten mee aan kernel
+	int arg_num = 0;
+	ocl_err(clSetKernelArg(test_kernel, arg_num++, sizeof(cl_int), &feature_size));
+	ocl_err(clSetKernelArg(test_kernel, arg_num++, sizeof(cl_mem), &test_zero);
+	ocl_err(clSetKernelArg(test_kernel, arg_num++, sizeof(cl_mem), &test_fill));
+
+	// voer kernel uit en deel GPU op in correcte delen
+	size_t work_sizes[] = {SIZE, SIZE, MEM_BLOCK_DEPTH};
+	ocl_err(clEnqueueNDRangeKernel(g_command_queue, test_kernel, 3, NULL, work_sizes, NULL, 0, NULL, NULL));
+
+	// wacht tot kernels gedaan zijn
+	ocl_err(clFinish(g_command_queue));
+
+	// maak array aan en uitkomst van kernel
+	float* test_results = malloc(sizeof(float) * (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH);
+	ocl_err(clEnqueueReadBuffer(g_command_queue, test_zero, CL_TRUE, 0, sizeof(cl_float) * (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH, test_result, 0, NULL, NULL));
+	
+	int x = 0;
+	for (int i = 0; i < 1; i++)
+	{
+		for (int j = 0; j < SIZE+2; j++)
+		{
+			for (int k = 0; k < SIZE+2; k++)
+			{
+				// print eerste vlak af van test_Results om te testen of hij ingevuld word.
+				if (test_result[i * ((SIZE+2) * (SIZE+2)) + j * (SIZE+2) + k] != 0)
+					printf("%d", test_result[i * ((SIZE+2) * (SIZE+2)) + j * (SIZE+2) + k]);
+			}
+		}
+	}
 }
 
 
@@ -698,6 +763,10 @@ void output_predictions() {
 
 
 int main(int argc, char *argv[]) {
+
+	void testFunctionZeropad()
+	
+	exit();
 	char buf[1024];
 	char *weights_file;
 	char *output_file;
