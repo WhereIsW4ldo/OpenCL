@@ -343,7 +343,7 @@ void testFunctionZeropad()
 	// geef correcte argumenten mee aan kernel
 	int arg_num = 0;
 	ocl_err(clSetKernelArg(test_kernel, arg_num++, sizeof(cl_int), &feature_size));
-	ocl_err(clSetKernelArg(test_kernel, arg_num++, sizeof(cl_mem), &test_zero);
+	ocl_err(clSetKernelArg(test_kernel, arg_num++, sizeof(cl_mem), &test_zero));
 	ocl_err(clSetKernelArg(test_kernel, arg_num++, sizeof(cl_mem), &test_fill));
 
 	// voer kernel uit en deel GPU op in correcte delen
@@ -355,7 +355,7 @@ void testFunctionZeropad()
 
 	// maak array aan en uitkomst van kernel
 	float* test_results = malloc(sizeof(float) * (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH);
-	ocl_err(clEnqueueReadBuffer(g_command_queue, test_zero, CL_TRUE, 0, sizeof(cl_float) * (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH, test_result, 0, NULL, NULL));
+	ocl_err(clEnqueueReadBuffer(g_command_queue, test_zero, CL_TRUE, 0, sizeof(cl_float) * (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH, test_results, 0, NULL, NULL));
 	
 	int x = 0;
 	for (int i = 0; i < 1; i++)
@@ -365,8 +365,8 @@ void testFunctionZeropad()
 			for (int k = 0; k < SIZE+2; k++)
 			{
 				// print eerste vlak af van test_Results om te testen of hij ingevuld word.
-				if (test_result[i * ((SIZE+2) * (SIZE+2)) + j * (SIZE+2) + k] != 0)
-					printf("%d", test_result[i * ((SIZE+2) * (SIZE+2)) + j * (SIZE+2) + k]);
+				if (test_results[i * ((SIZE+2) * (SIZE+2)) + j * (SIZE+2) + k] != 0)
+					printf("%d\n", test_results[i * ((SIZE+2) * (SIZE+2)) + j * (SIZE+2) + k]);
 			}
 		}
 	}
@@ -764,9 +764,10 @@ void output_predictions() {
 
 int main(int argc, char *argv[]) {
 
-	void testFunctionZeropad()
-	
-	exit();
+	void testFunctionZeropad();
+	printf("Test\n");
+
+	exit(1);
 	char buf[1024];
 	char *weights_file;
 	char *output_file;
