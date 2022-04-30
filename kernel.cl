@@ -90,13 +90,17 @@ __kernel void gpu_shenanigans(
 	}
 }
 
+/*
+ * A simple kernel that "should" fill in buffer 'zeropad' with values from 'data'.
+ * This zeropad has a padding of 1 width around all data from 'data'.
+ */
 __kernel void zeroshit(
 	int feature_size, __global float *zeropad, __global float *data
 )
 {
-	int id_x = get_global_id(0);
-	int id_y = get_global_id(1);
-	int id_z = get_global_id(2);
+	int id_x = get_global_id(0); // loopt van 0 -> feature_size
+	int id_y = get_global_id(1); // loopt van 0 -> feature_size
+	int id_z = get_global_id(2); // loopt van 0 -> input_depth
 
 	zeropad[id_z * (SIZE+2) * (SIZE+2) + (id_y + 1) * (SIZE+2) + id_x + 1] = data[id_z * (feature_size) * (feature_size) + id_y * (feature_size) + id_x];
 }

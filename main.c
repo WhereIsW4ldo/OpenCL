@@ -302,6 +302,11 @@ void add_bias_and_relu(int size, float out[][size], float bs) {
 	}
 }
 
+void testFunctionZeropad()
+{
+	cl_mem
+}
+
 
 void convolution_layer(int feature_size, int input_depth, int output_depth,
 					   float *input_features, float *layer_weights, float *layer_biases, float *output_features, int level) // momenteel worden alle lagen van de input meegegeven en niet maar 1 laag, dit moet nog aangepast worden
