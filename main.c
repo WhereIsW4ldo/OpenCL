@@ -304,11 +304,14 @@ void add_bias_and_relu(int size, float out[][size], float bs) {
 
 void testFunctionZeropad()
 {
+	printf("testFunctionZeropad() called");
 	cl_int error;
+	
 	cl_mem test_fill = clCreateBuffer(g_context,
             CL_MEM_READ_WRITE,
             sizeof(float) * SIZE * SIZE * MEM_BLOCK_DEPTH, NULL, &error);
 
+	//zeropad in convolution_layer() function
 	cl_mem test_zero = clCreateBuffer(g_context,
             CL_MEM_READ_WRITE,
             sizeof(float) * (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH, NULL, &error);
@@ -353,10 +356,13 @@ void testFunctionZeropad()
 	// wacht tot kernels gedaan zijn
 	ocl_err(clFinish(g_command_queue));
 
+	FILE *fp;
+	fp = fopen("zeropadtest.txt", "w");
+	
 	// maak array aan en uitkomst van kernel
 	float* test_results = malloc(sizeof(float) * (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH);
 	ocl_err(clEnqueueReadBuffer(g_command_queue, test_zero, CL_TRUE, 0, sizeof(cl_float) * (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH, test_results, 0, NULL, NULL));
-	
+	printf("Test\n");
 	int x = 0;
 	for (int i = 0; i < 1; i++)
 	{
@@ -365,69 +371,95 @@ void testFunctionZeropad()
 			for (int k = 0; k < SIZE+2; k++)
 			{
 				// print eerste vlak af van test_Results om te testen of hij ingevuld word.
-				if (test_results[i * ((SIZE+2) * (SIZE+2)) + j * (SIZE+2) + k] != 0)
-					printf("%d\n", test_results[i * ((SIZE+2) * (SIZE+2)) + j * (SIZE+2) + k]);
+				//if (test_results[i * ((SIZE+2) * (SIZE+2)) + j * (SIZE+2) + k] != 0){
+					printf("%f\n", test_results[i * ((SIZE+2) * (SIZE+2)) + j * (SIZE+2) + k]);
+					fprintf(fp, "%f\n", test_results[i * ((SIZE+2) * (SIZE+2)) + j * (SIZE+2) + k]);
+				//}
 			}
 		}
 	}
+	fclose(fp);
+	printf("testFunctionZeropad() finished\n");
 }
 
 
 void convolution_layer(int feature_size, int input_depth, int output_depth,
 					   float *input_features, float *layer_weights, float *layer_biases, float *output_features, int level) // momenteel worden alle lagen van de input meegegeven en niet maar 1 laag, dit moet nog aangepast worden
 {
-
 	// we geven hierbij een hele laag (in diepte mee) en deze moet de gpu dan verwerken
 	// dit zorgt voor minder communicatie tussen gpu en cpu en daardoor (hopelijk) een 
 	// kortere compute tijd.
+
+	/*----------------------------------------------------------------------------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------------------------------------------------------------------------*/
+	/*																ZEROKERNEL "zeroshit"															*/
+	/*----------------------------------------------------------------------------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------------------------------------------------------------------------*/
 	float zero[] = {0.0};
+	/* Zeropad buffer 
+	 *	- (2 px bigger in width and height)
+	 *	- Size of (SIZE + 2)*(SIZE +2)*MEM_BLOCK_DEPTH
+	 */
 	ocl_err(clEnqueueFillBuffer(g_command_queue, zeropad, zero, 1, 0, sizeof(cl_float) * (SIZE + 2) * (SIZE + 2) * MEM_BLOCK_DEPTH, 0, NULL, NULL));
 
-	clEnqueueWriteBuffer(g_command_queue, matrix,  CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size * input_depth, input_features, 0, NULL, NULL);
+	ocl_err(clEnqueueWriteBuffer(g_command_queue, matrix,  CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size * input_depth, input_features, 0, NULL, NULL));
 	
-	int arg_num = 0;
+	cl_uint arg_num = 0;
 	ocl_err(clSetKernelArg(zerokernel, arg_num++, sizeof(cl_int), &feature_size));
 	ocl_err(clSetKernelArg(zerokernel, arg_num++, sizeof(cl_mem), &zeropad));
 	ocl_err(clSetKernelArg(zerokernel, arg_num++, sizeof(cl_mem), &matrix));
 
-	size_t work_sizes[] = {feature_size, feature_size, input_depth};
-	ocl_err(clEnqueueNDRangeKernel(g_command_queue, zerokernel, 3, NULL, work_sizes, NULL, 0, NULL, NULL));
+	size_t work_sizes1[] = {feature_size, feature_size, input_depth};
+	ocl_err(clEnqueueNDRangeKernel(g_command_queue, zerokernel, 3, NULL, work_sizes1, NULL, 0, NULL, NULL));
 
 	float *z = malloc(sizeof(float) * MEM_BLOCK_DEPTH * (SIZE+2) * (SIZE+2));
 	ocl_err(clFinish(g_command_queue));
 	
 	ocl_err(clEnqueueReadBuffer(g_command_queue, zeropad, CL_TRUE, 0, sizeof(cl_float) * (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH, z, 0, NULL, NULL));
 
+	FILE *fp1;
+	FILE *fp2;
+	fp1 = fopen("zeropad_without_zeroes.txt", "w");
+	fp2 = fopen("zeropad_full.txt", "w");
+
 	int x = 0;
 	for (int i = 0; i<1; i++)
 	{
-		// printf("[");
 		for(int j = 0; j < SIZE+2;j++)
 		{
-			// printf("[");
 			for (int k = 0; k < SIZE+2; k++)
 			{
-				if (z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k] != 0.0)
+				if (z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k] != 0.0){
 					x += 1;
-				// printf("%f, ", z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k]);
-				// zeropad kan niet beschreven worden want hij toont allemaal 0
+					//printf("%f\n", z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k]);
+					fprintf(fp1, "%f\n", z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k]);
+				// zeropad kan niet beschreven worden want hij toont allemaal
+				}
+				fprintf(fp2, "%f\n", z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k]);
 			}
 			// printf("]\n");
 		}
 		// printf("]\n");
 	}
-	printf("niet lege plekken: %d\n", x);
+	fclose(fp1);
+	fclose(fp2);
+	//printf("niet lege plekken: %d\n", x);
 	// exit(0);
 
+	/*----------------------------------------------------------------------------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------------------------------------------------------------------------*/
+	/*																	KERNEL "gpu_shenanigans"													*/
+	/*----------------------------------------------------------------------------------------------------------------------------------------------*/
+	/*----------------------------------------------------------------------------------------------------------------------------------------------*/
 	// vul buffer matrix en kernel_ in met de data van input_features en layer_weights
 	// printf("writing to matrix\n");
-	// clEnqueueWriteBuffer(g_command_queue, matrix,  CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size * input_depth, input_features, 0, NULL, NULL);
+	//clEnqueueWriteBuffer(g_command_queue, matrix,  CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size * input_depth, input_features, 0, NULL, NULL);
 	// printf("wrote to matrix\n");
 
-	clEnqueueWriteBuffer(g_command_queue, kernel_, CL_TRUE, 0, sizeof(cl_float) * cshape[level][0] * cshape[level][1] * cshape[level][2] * cshape[level][3], layer_weights , 0, NULL, NULL);
+	clEnqueueWriteBuffer(g_command_queue, kernel_, CL_TRUE, 0, sizeof(cl_float) * output_depth * input_depth * CONV_SIZE * CONV_SIZE, layer_weights , 0, NULL, NULL);
 	// printf("wrote to kernel\n");
 
-	clEnqueueWriteBuffer(g_command_queue, layer  , CL_TRUE, 0, sizeof(cl_float) * cshape[level][0], layer_biases  , 0, NULL, NULL);
+	clEnqueueWriteBuffer(g_command_queue, layer  , CL_TRUE, 0, sizeof(cl_float) * output_depth, layer_biases  , 0, NULL, NULL);
 	// printf("wrote to layer\n");
 
 	// geef alle nodige argumenten mee aan de gpu (hier moeten er nog extra bij om te weten welke laag er effectief nodig is)
@@ -437,12 +469,12 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &output_depth));
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &matrix)); // input_features
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &kernel_));// layer_weights
-	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &layer));// layer_weights
+	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &layer));// layer_biases
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &output)); // output_features
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &zeropad)); // zeropad
 
-
-	ocl_err(clEnqueueNDRangeKernel(g_command_queue, kernel, 3, NULL, work_sizes, NULL, 0, NULL, NULL));
+	size_t work_sizes2[] = {feature_size, feature_size, input_depth, output_depth};
+	ocl_err(clEnqueueNDRangeKernel(g_command_queue, kernel, 3, NULL, work_sizes2, NULL, 0, NULL, NULL));
 
 	// printf("reading output now:\n");
 
@@ -572,6 +604,7 @@ void get_VGG16_predict(int only_convolution) {
 					  image, wc[level], bc[level], mem_block1, level);
 	time_measure_stop_and_print("Layer1");
 
+	memblock_to_file(cur_size * cshape[level][0] * cshape[level][0]);
 
 	time_measure_start("Layer2");
 	// Layer 2 (Convolution 64 -> 64)
@@ -740,7 +773,7 @@ void get_VGG16_predict(int only_convolution) {
 	dense(mem_block1_dense, wd[level], mem_block2_dense, dshape[level][0], dshape[level][1]);
 	add_bias_and_relu_flatten(mem_block2_dense, bd[level], dshape[level][1], 1);
 	softmax(mem_block2_dense, dshape[level][1]);
-	// dump_memory_structure_dense_to_file(mem_block2_dense, dshape[level][1]);
+	//dump_memory_structure_dense_to_file(mem_block2_dense, dshape[level][1]);
 	time_measure_stop_and_print("Layer22");
 	
 	return;
@@ -750,24 +783,38 @@ void get_VGG16_predict(int only_convolution) {
 void output_predictions() {
 	float max = 0.f;
 	int max_idx = 0;
+	FILE *fp;
+	fp = fopen("dense_result.txt", "w");
 	for (int i = 0; i < dshape[2][1]; i++) {
 		 if (max <  mem_block2_dense[i]) {
 			 max = mem_block2_dense[i];
 			 max_idx = i;
 		 }
+		fprintf(fp,"%f\n", mem_block2_dense[i]);
 	}
-
+	fclose(fp);
 	printf("Prediction: %s (score = %f)\n", imagenet_labels[max_idx], max);
 }
 
+void memblock_to_file(int size){
 
+	FILE *fp;
+	fp = fopen("memblock.txt", "w");
+	for (int i = 0; i < size; i++){
+		fprintf(fp, "%f\n", mem_block1[i]);
+	}
+	fclose(fp);
+}
 
 int main(int argc, char *argv[]) {
+	cl_platform_id platform = ocl_select_platform();
+    cl_device_id device = ocl_select_device(platform);
+    init_ocl(device);
+    create_program("kernel.cl", "");
 
-	void testFunctionZeropad();
-	printf("Test\n");
+	//testFunctionZeropad();
+	//exit(1);
 
-	exit(1);
 	char buf[1024];
 	char *weights_file;
 	char *output_file;
@@ -784,10 +831,7 @@ int main(int argc, char *argv[]) {
 		only_convolution = 1;
 	}
 
-	cl_platform_id platform = ocl_select_platform();
-    cl_device_id device = ocl_select_device(platform);
-    init_ocl(device);
-    create_program("kernel.cl", "");
+	
 
 	init_memory();
 	read_weights(weights_file, lvls);
