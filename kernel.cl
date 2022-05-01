@@ -29,7 +29,7 @@ inline void AtomicAdd(volatile __global float *source, const float operand)
                 newVal.intVal) != prevVal.intVal);
 }
 
-void conv_3x3 (int size, __global float *matrix, __global float *_kernel, __global float *out, __global float *zeropad)
+void conv_3x3 (int size, __global float *_kernel, __global float *out, __global float *zeropad)
 {
 	int i, j;
 	float sum;
@@ -62,31 +62,27 @@ void add_bias_and_relu(int size, __global float *out, float bs) {
 }
 
 __kernel void gpu_shenanigans(
-    int feature_size, int input_depth, int output_depth, __global float *input_features, 
+    int feature_size, int input_depth, int output_depth, 
     __global float *layer_weights, __global float *layer_biases, __global float *output_features, __global float *zeropad)
 {
-	int id_x = get_global_id(0); // loopt van 0 -> feature_size
-	int id_y = get_global_id(1); // loopt van 0 -> feature_size
-	int id_z = get_global_id(2); // loopt van 0 -> input_depth
-	//int id_a = get_global_id(3); // loopt van 0 -> output_depth
+	int id_x = get_global_id(0); // gaat van 0 -> feature_size
+	int id_y = get_global_id(1); // gaat van 0 -> feature_size
+	int id_z = get_global_id(2); // gaat van 0 -> input_depth
+	//int id_a = get_global_id(3); // gaat van 0 -> output_depth
 
 	//zeropad[id_z * (SIZE+2) * (SIZE+2) + (id_y + 1) * (SIZE+2) + id_x + 1] = input_features[id_z * (feature_size) * (feature_size) + id_y * (feature_size) + id_x];
 	
-	// vul 3D zeropad in met input_features data
-	barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
-
 	for (int output_it = 0; output_it < output_depth; output_it++) 
 	{
 		barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
-		conv_3x3(feature_size, &input_features[id_z * feature_size * feature_size],
-							&layer_weights[output_it * input_depth * CONV_SIZE * CONV_SIZE +
-											id_z * CONV_SIZE * CONV_SIZE],
-							&output_features[output_it * feature_size * feature_size], &zeropad[id_z * (SIZE+2) * (SIZE+2)]);
+		conv_3x3(feature_size,
+				 &layer_weights[output_it * input_depth * CONV_SIZE * CONV_SIZE + id_z * CONV_SIZE * CONV_SIZE],
+				 &output_features[output_it * feature_size * feature_size], 
+				 &zeropad[id_z * (SIZE+2) * (SIZE+2)]);
 		
 		barrier(CLK_GLOBAL_MEM_FENCE | CLK_LOCAL_MEM_FENCE); // om te synchroniseren tussen alle work-units
 		if (id_z == input_depth-1)
 			add_bias_and_relu(feature_size, &output_features[output_it * feature_size * feature_size], layer_biases[output_it]);
-		barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
 	}
 }
 
@@ -98,9 +94,9 @@ __kernel void zeroshit(
 	int feature_size, __global float *zeropad, __global float *data
 )
 {
-	int id_x = get_global_id(0); // loopt van 0 -> feature_size
-	int id_y = get_global_id(1); // loopt van 0 -> feature_size
-	int id_z = get_global_id(2); // loopt van 0 -> input_depth
+	int id_x = get_global_id(0); // gaat van 0 -> feature_size
+	int id_y = get_global_id(1); // gaat van 0 -> feature_size
+	int id_z = get_global_id(2); // gaat van 0 -> input_depth
 
 	zeropad[id_z * (SIZE+2) * (SIZE+2) + (id_y + 1) * (SIZE+2) + id_x + 1] = data[id_z * (feature_size) * (feature_size) + id_y * (feature_size) + id_x];
 }
