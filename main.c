@@ -398,7 +398,7 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	float zero[] = {0.0};
 	/* Zeropad buffer 
 	 *	- (2 px bigger in width and height)
-	 *	- Size of (SIZE + 2)*(SIZE +2)*MEM_BLOCK_DEPTH
+	 *	- Size of (SIZE + 2)*(SIZE + 2)*MEM_BLOCK_DEPTH
 	 */
 	ocl_err(clEnqueueFillBuffer(g_command_queue, zeropad, zero, 1, 0, sizeof(cl_float) * (SIZE + 2) * (SIZE + 2) * MEM_BLOCK_DEPTH, 0, NULL, NULL));
 
@@ -467,13 +467,13 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &feature_size));
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &input_depth));
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_int), &output_depth));
-	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &matrix)); // input_features
+	// ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &matrix)); // input_features moet niet meer meegegeven worden wegens zeropad al ingevuld
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &kernel_));// layer_weights
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &layer));// layer_biases
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &output)); // output_features
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &zeropad)); // zeropad
 
-	size_t work_sizes2[] = {feature_size, feature_size, input_depth, output_depth};
+	size_t work_sizes2[] = {feature_size, feature_size, input_depth};
 	ocl_err(clEnqueueNDRangeKernel(g_command_queue, kernel, 3, NULL, work_sizes2, NULL, 0, NULL, NULL));
 
 	// printf("reading output now:\n");
