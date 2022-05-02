@@ -400,9 +400,9 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	 *	- (2 px bigger in width and height)
 	 *	- Size of (SIZE + 2)*(SIZE + 2)*MEM_BLOCK_DEPTH
 	 */
-	ocl_err(clEnqueueFillBuffer(g_command_queue, zeropad, zero, 1, 0, sizeof(cl_float) * (SIZE + 2) * (SIZE + 2) * MEM_BLOCK_DEPTH, 0, NULL, NULL));
+	ocl_err(clEnqueueFillBuffer(g_command_queue, zeropad, zero, 1, 0, sizeof(cl_float) * (SIZE + 2) * (SIZE + 2) * input_depth, 0, NULL, NULL));
 
-	ocl_err(clEnqueueWriteBuffer(g_command_queue, matrix,  CL_TRUE, 0, sizeof(cl_float) * feature_size * feature_size * input_depth, input_features, 0, NULL, NULL));
+	ocl_err(clEnqueueWriteBuffer(g_command_queue, matrix,  CL_TRUE, 0, sizeof(cl_float) * SIZE * SIZE * input_depth, input_features, 0, NULL, NULL));
 	
 	cl_uint arg_num = 0;
 	ocl_err(clSetKernelArg(zerokernel, arg_num++, sizeof(cl_int), &feature_size));
@@ -417,32 +417,32 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	
 	ocl_err(clEnqueueReadBuffer(g_command_queue, zeropad, CL_TRUE, 0, sizeof(cl_float) * (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH, z, 0, NULL, NULL));
 
-	FILE *fp1;
-	FILE *fp2;
-	fp1 = fopen("zeropad_without_zeroes.txt", "w");
-	fp2 = fopen("zeropad_full.txt", "w");
+	// FILE *fp1;
+	// FILE *fp2;
+	// fp1 = fopen("zeropad_without_zeroes.txt", "w");
+	// fp2 = fopen("zeropad_full.txt", "w");
 
-	int x = 0;
-	for (int i = 0; i<1; i++)
-	{
-		for(int j = 0; j < SIZE+2;j++)
-		{
-			for (int k = 0; k < SIZE+2; k++)
-			{
-				if (z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k] != 0.0){
-					x += 1;
-					//printf("%f\n", z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k]);
-					fprintf(fp1, "%f\n", z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k]);
-				// zeropad kan niet beschreven worden want hij toont allemaal
-				}
-				fprintf(fp2, "%f\n", z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k]);
-			}
-			// printf("]\n");
-		}
-		// printf("]\n");
-	}
-	fclose(fp1);
-	fclose(fp2);
+	// int x = 0;
+	// for (int i = 0; i<1; i++)
+	// {
+	// 	for(int j = 0; j < SIZE+2;j++)
+	// 	{
+	// 		for (int k = 0; k < SIZE+2; k++)
+	// 		{
+	// 			if (z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k] != 0.0){
+	// 				x += 1;
+	// 				//printf("%f\n", z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k]);
+	// 				fprintf(fp1, "%f\n", z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k]);
+	// 			// zeropad kan niet beschreven worden want hij toont allemaal
+	// 			}
+	// 			fprintf(fp2, "%f\n", z[i * (SIZE+2) * (SIZE+2) + j * (SIZE+2) + k]);
+	// 		}
+	// 		// printf("]\n");
+	// 	}
+	// 	// printf("]\n");
+	// }
+	// fclose(fp1);
+	// fclose(fp2);
 	//printf("niet lege plekken: %d\n", x);
 	// exit(0);
 
@@ -459,7 +459,7 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	clEnqueueWriteBuffer(g_command_queue, kernel_, CL_TRUE, 0, sizeof(cl_float) * output_depth * input_depth * CONV_SIZE * CONV_SIZE, layer_weights , 0, NULL, NULL);
 	// printf("wrote to kernel\n");
 
-	clEnqueueWriteBuffer(g_command_queue, layer  , CL_TRUE, 0, sizeof(cl_float) * output_depth, layer_biases  , 0, NULL, NULL);
+	clEnqueueWriteBuffer(g_command_queue, layer  , CL_TRUE, 0, sizeof(cl_float) * output_depth, layer_biases , 0, NULL, NULL);
 	// printf("wrote to layer\n");
 
 	// geef alle nodige argumenten mee aan de gpu (hier moeten er nog extra bij om te weten welke laag er effectief nodig is)
@@ -480,7 +480,15 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 
 	ocl_err(clFinish(g_command_queue));
 
-	ocl_err(clEnqueueReadBuffer(g_command_queue, output, CL_TRUE, 0, sizeof(cl_float) * SIZE * SIZE * MEM_BLOCK_DEPTH, output_features, 0, NULL, NULL));
+	ocl_err(clEnqueueReadBuffer(g_command_queue, output, CL_TRUE, 0, sizeof(cl_float) * SIZE * SIZE * output_depth, output_features, 0, NULL, NULL));
+	// doe add_bias_and_relu op cpu
+
+
+
+	for (int i = 0; i < output_depth; i++)
+	{
+		// add_bias_and_relu(feature_size, &output_features[i * feature_size * feature_size], layer_biases[i]);
+	}
 
 	// printf("read output from GPU\n");
 }
@@ -604,8 +612,7 @@ void get_VGG16_predict(int only_convolution) {
 					  image, wc[level], bc[level], mem_block1, level);
 	time_measure_stop_and_print("Layer1");
 
-	memblock_to_file(cur_size * cshape[level][0] * cshape[level][0]);
-
+	
 	time_measure_start("Layer2");
 	// Layer 2 (Convolution 64 -> 64)
 	level = 1;
@@ -614,6 +621,8 @@ void get_VGG16_predict(int only_convolution) {
 					  time_measure_stop_and_print("Layer2");
 	reset_mem_block(mem_block1);
 	
+	memblock_to_file(cur_size * cshape[level][0] * cshape[level][0]);
+	exit(0);
 	
 	time_measure_start("Layer3");
 	// Layer 3 (MaxPooling)
@@ -628,6 +637,7 @@ void get_VGG16_predict(int only_convolution) {
 					  mem_block2, wc[level], bc[level], mem_block1, level);
 	reset_mem_block(mem_block2);
 	time_measure_stop_and_print("Layer4");
+
 
 
 	time_measure_start("Layer5");
@@ -730,6 +740,8 @@ void get_VGG16_predict(int only_convolution) {
 					  mem_block2, wc[level], bc[level], mem_block1, level);
 	reset_mem_block(mem_block2);
 	time_measure_stop_and_print("Layer17");
+
+	
 	
 	time_measure_start("Layer18");
 	// Layer 18 (MaxPooling)
@@ -801,7 +813,7 @@ void memblock_to_file(int size){
 	FILE *fp;
 	fp = fopen("memblock.txt", "w");
 	for (int i = 0; i < size; i++){
-		fprintf(fp, "%f\n", mem_block1[i]);
+		fprintf(fp, "%f\n", mem_block2[i]);
 	}
 	fclose(fp);
 }
