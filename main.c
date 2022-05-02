@@ -622,7 +622,7 @@ void get_VGG16_predict(int only_convolution) {
 	reset_mem_block(mem_block1);
 	
 	memblock_to_file(cur_size * cshape[level][0] * cshape[level][0]);
-	exit(0);
+	// exit(0);
 	
 	time_measure_start("Layer3");
 	// Layer 3 (MaxPooling)

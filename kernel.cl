@@ -37,15 +37,15 @@ void conv_3x3 (int size, __global float *_kernel, __global float *out, __global 
 	i = get_global_id(0);
 	j = get_global_id(1);	
 	
-	sum = zeropad[i * (SIZE + 2) + j] * _kernel[0 * 3 + 0] +
-		zeropad[(i + 1) * (SIZE + 2) + j] * _kernel[1 * 3 + 0] +
-		zeropad[(i + 2) * (SIZE + 2) + j] * _kernel[2 * 3 + 0]+
-		zeropad[i * (SIZE + 2) + j + 1] * _kernel[0 * 3 + 1]+
-		zeropad[(i + 1) * (SIZE + 2) + j + 1] * _kernel[1 * 3 + 1]+
-		zeropad[(i + 2) * (SIZE + 2) + j + 1] * _kernel[2 * 3 + 1]+
-		zeropad[i * (SIZE + 2) + j + 2] * _kernel[0 * 3 + 2]+
-		zeropad[(i + 1) * (SIZE + 2) + j + 2] * _kernel[1 * 3 + 2]+
-		zeropad[(i + 2) * (SIZE + 2) + j + 2] * _kernel[2 * 3 + 2];
+	sum = zeropad[i * size + j] * _kernel[0 * CONV_SIZE + 0] +
+		zeropad[(i + 1) * size + j] * _kernel[1 * CONV_SIZE + 0] +
+		zeropad[(i + 2) * size + j] * _kernel[2 * CONV_SIZE + 0]+
+		zeropad[i * size + j + 1] * _kernel[0 * CONV_SIZE + 1]+
+		zeropad[(i + 1) * size + j + 1] * _kernel[1 * CONV_SIZE + 1]+
+		zeropad[(i + 2) * size + j + 1] * _kernel[2 * CONV_SIZE + 1]+
+		zeropad[i * size + j + 2] * _kernel[0 * CONV_SIZE + 2]+
+		zeropad[(i + 1) * size + j + 2] * _kernel[1 * CONV_SIZE + 2]+
+		zeropad[(i + 2) * size + j + 2] * _kernel[2 * CONV_SIZE + 2];
 	
 	AtomicAdd(&out[size*i + j], sum);
 	
@@ -70,7 +70,6 @@ __kernel void gpu_shenanigans(
 	int id_z = get_global_id(2); // gaat van 0 -> input_depth
 	//int id_a = get_global_id(3); // gaat van 0 -> output_depth
 
-	//zeropad[id_z * (SIZE+2) * (SIZE+2) + (id_y + 1) * (SIZE+2) + id_x + 1] = input_features[id_z * (feature_size) * (feature_size) + id_y * (feature_size) + id_x];
 
 	for (int output_it = 0; output_it < output_depth; output_it++) 
 	{
@@ -78,11 +77,11 @@ __kernel void gpu_shenanigans(
 		conv_3x3(feature_size,
 				 &layer_weights[output_it * input_depth * CONV_SIZE * CONV_SIZE + id_z * CONV_SIZE * CONV_SIZE],
 				 &output_features[output_it * feature_size * feature_size], 
-				 &zeropad[id_z * (SIZE+2) * (SIZE+2)]);
+				 &zeropad[id_z * (feature_size+2) * (feature_size+2)]);
 		
 		// barrier(CLK_GLOBAL_MEM_FENCE | CLK_LOCAL_MEM_FENCE); // om te synchroniseren tussen alle work-units
 		if (id_z == input_depth-1)
-			add_bias_and_relu(feature_size, &output_features[output_it * SIZE * SIZE], layer_biases[output_it]);
+			add_bias_and_relu(feature_size, &output_features[output_it * feature_size * feature_size], layer_biases[output_it]);
 	}
 }
 
