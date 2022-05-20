@@ -401,21 +401,31 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	 *	- Size of (SIZE + 2)*(SIZE + 2)*MEM_BLOCK_DEPTH
 	 */
 	ocl_err(clEnqueueFillBuffer(g_command_queue, zeropad, zero, 1, 0, sizeof(cl_float) * (SIZE + 2) * (SIZE + 2) * input_depth, 0, NULL, NULL));
+	// schrijf zeropad buffer vol met 0 (ter grootte van heel de zeropad buffer (float * (size+2)(size+2)(input_depth)))
 
 	ocl_err(clEnqueueWriteBuffer(g_command_queue, matrix,  CL_TRUE, 0, sizeof(cl_float) * SIZE * SIZE * input_depth, input_features, 0, NULL, NULL));
-	
+	// schrijft data weg in buffer 'matrix' van input features (ter grootte van (SIZE * SIZE * input_depth))
+
 	cl_uint arg_num = 0;
 	ocl_err(clSetKernelArg(zerokernel, arg_num++, sizeof(cl_int), &feature_size));
 	ocl_err(clSetKernelArg(zerokernel, arg_num++, sizeof(cl_mem), &zeropad));
 	ocl_err(clSetKernelArg(zerokernel, arg_num++, sizeof(cl_mem), &matrix));
+	// geef de waarde van feature size door aan de kernel
+	// geef de buffers zeropad en matrix door aan kernel
 
 	size_t work_sizes1[] = {feature_size, feature_size, input_depth};
+	// deel de gpu in in feature_size * feature_size * input_depth work_items op om te parralelliseren
+
 	ocl_err(clEnqueueNDRangeKernel(g_command_queue, zerokernel, 3, NULL, work_sizes1, NULL, 0, NULL, NULL));
+	// voer de zerokernel uit
 
 	float *z = malloc(sizeof(float) * MEM_BLOCK_DEPTH * (SIZE+2) * (SIZE+2));
+	memset(z, 0.0, (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH);
 	ocl_err(clFinish(g_command_queue));
+	// wacht tot alle zerokernels gedaan zijn
 	
 	ocl_err(clEnqueueReadBuffer(g_command_queue, zeropad, CL_TRUE, 0, sizeof(cl_float) * (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH, z, 0, NULL, NULL));
+	// lees waarde van zeropad-buffer in en steek deze in z (ter grootte van (float * (SIZE+2) * (SIZE+2) * MEM_BLOCK_DEPTH)
 
 	// FILE *fp1;
 	// FILE *fp2;
@@ -457,10 +467,10 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	// printf("wrote to matrix\n");
 
 	clEnqueueWriteBuffer(g_command_queue, kernel_, CL_TRUE, 0, sizeof(cl_float) * output_depth * input_depth * CONV_SIZE * CONV_SIZE, layer_weights , 0, NULL, NULL);
-	// printf("wrote to kernel\n");
+	// vul buffer kernel_ met data van layer_weights (ter grootte van cl_float * output_depth * input_depth * CONV_SIZE * CONV_SIZE)
 
 	clEnqueueWriteBuffer(g_command_queue, layer  , CL_TRUE, 0, sizeof(cl_float) * output_depth, layer_biases , 0, NULL, NULL);
-	// printf("wrote to layer\n");
+	// vul buffer layer in met data van layer_biases (ter grootte van float * output_depth)
 
 	// geef alle nodige argumenten mee aan de gpu (hier moeten er nog extra bij om te weten welke laag er effectief nodig is)
 	arg_num = 0;
@@ -472,16 +482,19 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &layer));// layer_biases
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &output)); // output_features
 	ocl_err(clSetKernelArg(kernel, arg_num++, sizeof(cl_mem), &zeropad)); // zeropad
+	// geef argumenten mee met kernel: feature_size, input_depth, output_depth als gewone int
+	// geef buffers mee aan kernel: kernel_, layer, output, zeropad (telkens een pointer naar het eerste element)
 
 	size_t work_sizes2[] = {feature_size, feature_size, input_depth};
+	// deel gpu work_items op in feature_size * feature_size * input_depth onderdelen
 	ocl_err(clEnqueueNDRangeKernel(g_command_queue, kernel, 3, NULL, work_sizes2, NULL, 0, NULL, NULL));
-
-	// printf("reading output now:\n");
+	// laat de gpu al zijn kernels uitvoeren
 
 	ocl_err(clFinish(g_command_queue));
+	// wacht tot alle kernels op de gpu gedaan zijn
 
 	ocl_err(clEnqueueReadBuffer(g_command_queue, output, CL_TRUE, 0, sizeof(cl_float) * SIZE * SIZE * output_depth, output_features, 0, NULL, NULL));
-	// doe add_bias_and_relu op cpu
+	// lees van de output-buffer van output in output_features
 
 
 
