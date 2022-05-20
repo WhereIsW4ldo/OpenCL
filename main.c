@@ -10,14 +10,57 @@
 
 
 // alle functies van opencl die mogelijks uitleg nodig hebben:
-	// clCreateBuffer(cl_context, cl_mem_flags, size_t, *host_ptr, errcode)
+// clCreateBuffer(cl_context, cl_mem_flags, size_t, *host_ptr, errcode)
 	// cl_context: een openCL context om een buffer object te creeren
 	// cl_mem_flags: of de buffer read_only, write_only, read_write,... is
 	// size_t: de grootte in bytes van de buffer memory dat gereserveerd word
 	// host_ptr: pointer naar data op host die mogelijks al gealloceerd is
 	// errrcode: mogelijkse error code
 
-	
+// clEnqueueFillBuffer(cl_command_queue, cl_mem_buffer, *pattern, pattern_size, offset, size, num_even, wait_list, event)
+	// cl_command_queue: command queue waar fill command in word gezet
+	// cl_mem_buffer: een buffer object dat gevuld moet worden
+	// pattern: met dit pattroon moet de buffer gevuld worden (meestal 0)
+	// pattern_size: grootte van pattern
+	// offset: de locatie in bytes van de regio die gevuld moet worden van de buffer
+	// size: de grootte van de buffer die gevuld moet worden
+	// num_even: events die voor deze moet gedaan zijn
+	// wait_list: events die nog voor deze gedaan moeten zijn in een lijst
+	// event: status van deze actie
+
+// clEnqueueWriteBuffer(command_queue, buffer, blocking_write, offset, cg, *prt, num_even, wait_list, event)
+	// command_queue: command queue waar write command in word gezet
+	// buffer: een buffer object dat geschreven moeten worden
+	// blocking_write: een aanduiding of de schrijf operatie geblockt is of niet
+	// offset: de locatie in bytes van de regio die gevuld moet worden van de buffer
+	// cb: grootte in bytes van data dat geschreven moet worden
+	// prt: pointer naar buffer in host memory waarheen data geschreven word
+	// num_even: events die voor deze moet gedaan zijn
+	// wait_list: events die nog voor deze gedaan moeten zijn in een lijst
+	// event: status van deze actie
+
+// clEnqueueNDRangeKernel(command_queue, kernel, work_dim, global_work_offset, global_work_size, local_work_size, num_even, wait_list, event)
+	// command_queue: command queue waar write command in word gezet
+	// kernel: kernel object dat uitgevoerd moet worden
+	// work_dim: aantal dimensies die de global work-items en work-items in een work-groep hebben
+	// global_work_offset: altijd NULL
+	// global_work_size: pointer naar een array om dimensies aan te geven
+	// local_work_size: ^
+	// num_even: events die voor deze moet gedaan zijn
+	// wait_list: events die nog voor deze gedaan moeten zijn in een lijst
+	// event: status van deze actie
+
+// clEnqueueReadBuffer(command_queue, buffer, blocking_read, offset, size, *ptr, num_even, wait_list, event)
+	// command_queue: command queue waar write command in word gezet
+	// buffer: refereert naar een buffer object waarvan gelezen wordt
+	// blocking_read: laat zien of de operaties blocking of niet blocking zijn
+	// offset: grootte van bytes van waar men moet beginnen met lezen
+	// size: grootte in bytes hoeveel er moet gelezen worden van buffer
+	// *ptr: waar data van buffer ingestoken moet worden
+	// num_even: events die voor deze moet gedaan zijn
+	// wait_list: events die nog voor deze gedaan moeten zijn in een lijst
+	// event: status van deze actie
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -420,7 +463,7 @@ void convolution_layer(int feature_size, int input_depth, int output_depth,
 	 */
 	ocl_err(clEnqueueFillBuffer(g_command_queue, zeropad, zero, 1, 0, sizeof(cl_float) * (SIZE + 2) * (SIZE + 2) * input_depth, 0, NULL, NULL));
 	// schrijf zeropad buffer vol met 0 (ter grootte van heel de zeropad buffer (float * (size+2)(size+2)(input_depth)))
-
+	
 	ocl_err(clEnqueueWriteBuffer(g_command_queue, matrix,  CL_TRUE, 0, sizeof(cl_float) * SIZE * SIZE * input_depth, input_features, 0, NULL, NULL));
 	// schrijft data weg in buffer 'matrix' van input features (ter grootte van (SIZE * SIZE * input_depth))
 
