@@ -63,18 +63,18 @@ marginparwidth=1.5cm, marginparsep=0.4cm, margin=2.5cm]{geometry}
 
 \section{Introductie}
 In dit verslag zal het paralleliseren van een programma dat een afbeelding kan classificeren besproken worden.
-Eerst zal het originele niet-geparalleliseerde programma besproken worden. Vervolgens zal er ingegaan worden op 
+Eerst zal het originele niet-geparalleliseerde programma bekeken worden. Vervolgens zal er ingegaan worden op 
 de verbeteringen die er aan het originele programma aangebracht zijn om het parallel te laten functioneren. Ten slotte
 zullen de resultaten van de beide programma's vergeleken worden.
 
 \section{Origineel}
 Eerst en vooral werd bestudeerd hoe het programma juist werkte. Vervolgens bekeken we welke layers het meeste computing time 
 innamen. Dit om te bepalen welke layers nog het meest ruimte voor verbetering hadden. De layertijden van het originele programma
-zijn te zien op figuur 2.
+zijn te zien op figuur \ref{layers}.
 
 \noindent
 Het is duidelijk dat layers 1, 3, 6, 10, 14, 18, 19, 21 en 22 reeds erg snel zijn. Deze hebben dus minder marge voor verbetering.
-Hierdoor keken we dus naar de overgebleven layers. Het werd snel duidelijk dat al deze layers gebruikmaken van de convolution\_layer functie.
+Hierdoor keken we naar de overgebleven layers. Het werd snel duidelijk dat deze allemaal gebruikmaken van de convolution\_layer functie.
 Het is dan ook deze functie dat gekozen werd om te paralleliseren.
 
 \section{Verbeterd}
@@ -116,6 +116,7 @@ Het is dan ook deze functie dat gekozen werd om te paralleliseren.
     \end{axis}
   \end{tikzpicture}
   \caption{Execution time of original and improved program}
+  \label{general}
 \end{figure}
 
 \begin{figure}
@@ -162,6 +163,7 @@ Het is dan ook deze functie dat gekozen werd om te paralleliseren.
     \end{axis}
   \end{tikzpicture}
   \caption{Layer times of original and improved program}
+  \label{layers}
 \end{figure}
 
 \bibliography{refs}
