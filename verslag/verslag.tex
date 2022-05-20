@@ -80,6 +80,20 @@ Het is dan ook deze functie dat gekozen werd om te paralleliseren.
 \section{Verbeterd}
 
 \section{Resultaten}
+Het verbeterde programma is duidelijk sneller dan het originele, dit is zichtbaar in figuur \ref{general}. De totale computing time
+werd verlaagd van gemiddeld 17 seconden naar gemiddeld 2.5 seconden.
+
+\noindent
+Daarnaast is duidelijk te zien in figuur \ref{layers} dat het opzet om layers 2, 4, 5, 7, 8, 9, 11, 12, 13, 15, 16 en 17 - die allemaal
+gebruikmaken van de convolution\_layer functie - te versnellen geslaagd is.
+
+\noindent
+Het is ook goed te zien dat al de andere layers die nog steeds volledig op de CPU uitgevoerd worden en dus niet geparalleliseerd zijn
+nog steeds dezelfde tijd hebben.
+
+\noindent
+Ten slotte is het belangrijk om aan te geven dat ondanks het versnellen van het programma, we wel nog een fout resultaat krijgen.
+We zouden "tabby\_cat" moeten krijgen, maar krijgen in plaats daarvan steeds het resultaat "buckle". We hebben 
 
 \begin{figure}
   \centering
