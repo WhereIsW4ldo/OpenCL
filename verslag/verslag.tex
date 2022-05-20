@@ -78,6 +78,29 @@ Hierdoor keken we naar de overgebleven layers. Het werd snel duidelijk dat deze 
 Het is dan ook deze functie dat gekozen werd om te paralleliseren.
 
 \section{Verbeterd}
+We hebben concolution_layer geparalleliseerd door deze over te plaatsen op de GPU. Hier waren enkele moeilijke omzettingen om goed 
+over na te denken. Zo was het dat we een rand met 0 rond onze input_data moesten krijgen en dit origineel ook in diezelfde kernel 
+uitvoerde. Dit was achteraf echter geen goed idee dus hier hebben we een apparte kernel voor aangemaakt.
+
+\noindent
+Nu werken we dus met 2 apparte kernels, de eerste kernel is om onze input_data in de zeropad buffer te steken. Dit is een zeer
+korte en eenvoudige kernel die enkel moet lezen van input_data en schrijven naar zeropad.
+
+\noindent
+Voordat we de kernel kunnen gebruiken moeten we eerst alle gebruikte (gedeelde) buffers vullen. De zeropad buffer 
+word zeer simpel gevuld met allemaal 0, de andere buffers worden gevuld met meegegeven data omdat de GPU hier data
+van moet lezen.
+
+\noindent
+De tweede kernel is de kernel die effectief de convolutielaag gaat uitrekenen. We hebben ervoor gekozen om zoveel mogelijk te 
+parralelliseren en dus hebben we de gpu opgeldeeld in feature_size * feature_size * input_depth work-items.
+Door dit te doen moeten we slechts 1 for-loop uitvoeren in onze tweede kernel. 
+We hebben ook gebruik gemaakt van een atomische som, dit was nodig omdat het kan zijn dat 2 work-items tegelijk een '+='-operatie
+willen uitvoeren en dit noemt men een race-conditie. Hier kan de uitkomst dus niet correct zijn. Door deze atomische add word dit 
+vermeden en is de uitkomst dus altijd correct.
+
+\noindent
+Ten slotte lezen we alle data uit deze gedeelde buffer en steken we deze in het geheugen van de CPU.
 
 \section{Resultaten}
 
