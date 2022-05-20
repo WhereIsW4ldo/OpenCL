@@ -62,31 +62,31 @@ marginparwidth=1.5cm, marginparsep=0.4cm, margin=2.5cm]{geometry}
 \maketitle
 
 \section{Introductie}
-In dit verslag zal het paralleliseren van een programma dat een afbeelding kan classificeren besproken worden.
-Eerst zal het originele niet-geparalleliseerde programma bekeken worden. Vervolgens zal er ingegaan worden op 
+In dit verslag bespreken we het paralleliseren van een programma dat een afbeelding kan classificeren.
+Eerst bekijken we het originele niet-geparalleliseerde programma. Vervolgens zal er ingegaan worden op 
 de verbeteringen die er aan het originele programma aangebracht zijn om het parallel te laten functioneren. Ten slotte
-zullen de resultaten van de beide programma's vergeleken worden.
+zullen we de resultaten van de beide programma's vergelijken.
 
 \section{Origineel}
-Eerst en vooral werd bestudeerd hoe het programma juist werkte. Vervolgens bekeken we welke layers het meeste computing time 
+Eerst en vooral bestudeerden we hoe het programma juist werkt. Vervolgens bekeken we welke layers het meeste computing time 
 innamen. Dit om te bepalen welke layers nog het meest ruimte voor verbetering hadden. De layertijden van het originele programma
 zijn te zien op figuur \ref{layers}.
 
 \medskip
 \noindent
-Het is duidelijk dat layers 1, 3, 6, 10, 14, 18, 19, 21 en 22 reeds erg snel zijn. Deze hebben dus minder marge voor verbetering.
+Het is duidelijk dat layers 1, 3, 6, 10, 14, 18, 19, 21 en 22 reeds erg snel zijn en dus minder marge hebben voor verbetering.
 Hierdoor keken we naar de overgebleven layers. Het werd snel duidelijk dat deze allemaal gebruikmaken van de "convolution\_layer" functie.
 Het is dan ook deze functie dat gekozen werd om te paralleliseren.
 
 \section{Verbeterd}
-We hebben de functie "convolution\_layer" geparalleliseerd door deze over te plaatsen op de GPU. 
-Hier waren enkele moeilijke omzettingen nodig waarover goed moest worden nagedacht.
-Zo was het dat we een rand met 0 rond onze input\_data moesten krijgen en dit origineel ook in dezelfde kernel 
-uitvoerde. Dit was achteraf echter geen goed idee dus hier hebben we een aparte kernel voor aangemaakt.
+Zoals vermeld in vorige paragraaf is het de "convolution\_layer" functie die we geparalleliseerd hebben door deze
+te laten uitvoeren op de GPU. Om dit te verwezenlijken waren enkele moeilijke omzettingen nodig.
+Zo was het nodig om de rand met nullen rond onze input\_data te plaatsen. Dit probeerden we eerst mee in dezelfde kernel 
+uit te voeren, wat achteraf echter geen goed idee bleek. Dit leidde tot het maken van een aparte kernel die deze klus klaarde.
 
 \medskip
 \noindent
-Nu werken we dus met 2 aparte kernels, de eerste kernel is om onze input\_data in de zeropad buffer te steken. 
+Ons verbeterde programma maakt dus gebruik van 2 aparte kernels. De eerste is om onze input\_data in de zeropad buffer te steken. 
 Dit is een zeer korte en eenvoudige kernel die enkel moet lezen van input\_data en schrijven naar zeropad.
 
 \medskip
@@ -100,9 +100,9 @@ van moet lezen.
 De tweede kernel is de kernel die effectief de convolutielaag gaat uitrekenen. We hebben ervoor gekozen om zoveel mogelijk te 
 paralleliseren en dus hebben we de gpu opgedeeld in feature\_size * feature\_size * input\_depth work-items.
 Door dit te doen moeten we slechts 1 for-loop uitvoeren in onze tweede kernel. 
-We hebben ook gebruik gemaakt van een atomische som, dit was nodig omdat het kan zijn dat 2 work-items tegelijk een '+='-operatie
-willen uitvoeren en dit noemt men een race-conditie. Hier kan de uitkomst dus niet correct zijn. Door deze atomische add word dit 
-vermeden en is de uitkomst dus altijd correct.
+We hebben ook gebruikgemaakt van een atomische som, dit was nodig omdat het kan zijn dat 2 work-items tegelijk een '+='-operatie
+willen uitvoeren wat een race-conditie kan veroorzaken met een foute uitkomst als gevolg. Door deze atomische som wordt dit 
+vermeden en is de uitkomst dus steeds correct.
 
 \medskip
 \noindent
@@ -115,13 +115,13 @@ werd verlaagd van gemiddeld 17 seconden naar gemiddeld 2.5 seconden.
 \medskip
 \noindent
 Daarnaast is duidelijk te zien in figuur \ref{layers} dat het opzet om layers 2, 4, 5, 7, 8, 9, 11, 12, 13, 15, 16 en 17 - die allemaal
-gebruikmaken van de "convolution\_layer" functie - te versnellen geslaagd is.
+gebruikmaken van de "convolution\_layer" functie - te versnellen, geslaagd is.
 
 \medskip
 \noindent
 Het is ook goed te zien dat al de andere layers die nog steeds volledig op de CPU uitgevoerd worden en dus niet geparalleliseerd zijn
 nog steeds dezelfde tijd hebben. Specifiek voor de laatste 3 layers is er nog ruimte voor versnelling. Dit zou eventueel mogelijk geweest
-zijn door de "dense" functie te paralleliseren.
+zijn door de "dense" functie ook nog te paralleliseren.
 
 \begin{figure}[h]
   \centering
@@ -211,7 +211,7 @@ zijn door de "dense" functie te paralleliseren.
 \section{Conclusie}
 Ondanks het succesvol versnellen van het programma, kregen we wel nog een fout resultaat.
 We zouden "tabby\_cat" moeten krijgen, maar krijgen in plaats daarvan steeds het resultaat "buckle". We hebben het grootste deel
-van het labo gezocht naar de fout(en) waardoor we steeds een incorrect resultaat kregen, maar vonden deze tevergeefs niet.
+van de labo sessies gezocht naar de fout(en) waardoor we steeds een incorrect resultaat kregen, maar vonden deze tevergeefs niet.
 
 \bibliography{refs}
 \end{document}
