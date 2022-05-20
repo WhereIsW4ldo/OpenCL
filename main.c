@@ -8,6 +8,17 @@
 	Example: ZFC_VGG16_CPU.exe "weights.txt" "image_list.txt" "results.txt" 1
 */
 
+
+// alle functies van opencl die mogelijks uitleg nodig hebben:
+	// clCreateBuffer(cl_context, cl_mem_flags, size_t, *host_ptr, errcode)
+	// cl_context: een openCL context om een buffer object te creeren
+	// cl_mem_flags: of de buffer read_only, write_only, read_write,... is
+	// size_t: de grootte in bytes van de buffer memory dat gereserveerd word
+	// host_ptr: pointer naar data op host die mogelijks al gealloceerd is
+	// errrcode: mogelijkse error code
+
+	
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -159,6 +170,13 @@ cl_mem create_and_init_vector(int size)
     cl_mem dev_vec = clCreateBuffer(g_context,
             CL_MEM_READ_WRITE,
             sizeof(float) * size * size * MEM_BLOCK_DEPTH, NULL, &error);
+	// maakt een buffer gpu en cpu aan kunnen:
+	// clCreateBuffer(cl_context, cl_mem_flags, size_t, *host_ptr, errcode)
+	// cl_context: een openCL context om een buffer object te creeren
+	// cl_mem_flags: of de buffer read_only, write_only, read_write,... is
+	// size_t: de grootte in bytes van de buffer memory dat gereserveerd word
+	// host_ptr: pointer naar data op host die mogelijks al gealloceerd is
+	// errrcode: mogelijkse error code
     ocl_err(error);
 	printf("created dev vector\n");
     return dev_vec;
